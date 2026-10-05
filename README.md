@@ -276,6 +276,14 @@ server request runs in a worker so the dialog stays responsive. Startup and loca
 preflight make no server requests. **Apply** changes this session. **Save** also
 atomically updates the dotfile and preserves unrelated settings and comments.
 Hosted API keys remain environment-only and are never serialized from settings.
+The dialog shows the active provider/model separately from the draft selection.
+Selecting OpenRouter and then pressing Escape or Cancel leaves the active provider
+unchanged. If it was OpenAI, the next submission still requires `OPENAI_API_KEY`.
+Choose an explicit model and press Apply or Save to use OpenRouter for the next run.
+Issue #30's investigation did not reproduce an OpenAI-key error after applying
+OpenRouter. Regression tests reproduce that error after discarding an OpenRouter
+draft while OpenAI remains active. This explains a possible trigger; the original
+report's exact sequence is unconfirmed.
 Active environment overrides appear in the dialog and take precedence again after
 restart. Save failures retain the previous file and keep the dialog open.
 
