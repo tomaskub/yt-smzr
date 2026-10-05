@@ -36,11 +36,26 @@ includes the YouTube JavaScript challenge solver.
 
 ## Development
 
+The [Quality workflow](.github/workflows/quality.yml) runs on pull requests and
+pushes to `main` using Ubuntu and Python from `.python-version`. It installs
+uv 0.12.5 and the locked runtime and development dependencies, then checks
+lint, formatting, types, and tests. To reproduce the CI checks locally with
+the same uv version:
+
 ```sh
-uv run pytest
-uv run ruff check .
-uv run ruff format --check .
-uv run pyright
+uv python install
+uv sync --locked --dev
+uv run --locked ruff check .
+uv run --locked ruff format --check .
+uv run --locked pyright
+uv run --locked pytest
+```
+
+`--locked` rejects an outdated `uv.lock` instead of updating it during checks.
+The checks require no API keys or model downloads. To build a distribution
+locally, also run:
+
+```sh
 uv build
 ```
 
