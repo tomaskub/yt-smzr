@@ -84,6 +84,12 @@ class SettingsScreen(ModalScreen[Settings | None]):
 
         with VerticalScroll(classes="dialog"):
             yield Static("Summarization settings", markup=False)
+            yield Static(
+                f"Active: {self.settings.summarization_provider} / "
+                f"{self.settings.summarization_model}",
+                id="settings-active",
+                markup=False,
+            )
             yield Select(
                 [(name, name) for name in ("openai", "openrouter", "ollama")],
                 value=self.settings.summarization_provider,
@@ -115,7 +121,8 @@ class SettingsScreen(ModalScreen[Settings | None]):
             )
             yield Static(notice, id="settings-overrides", markup=False)
             yield Static(
-                "Apply changes subsequent runs. Save also writes ~/.yt-smzr.toml.",
+                "Selection is a draft until Apply or Save. Escape/Cancel discards "
+                "edits. Save also writes ~/.yt-smzr.toml.",
                 id="settings-notice",
                 markup=False,
             )
