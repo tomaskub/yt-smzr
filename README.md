@@ -3,8 +3,8 @@
 A local terminal app for turning YouTube videos into transcripts and summaries.
 This bootstrap includes package installation, CLI entrypoints, and a Textual
 welcome screen, reusable YouTube URL validation and metadata fetching, local
-cache storage, confirmed audio downloads, and timestamped transcription.
-Summarization and the connected workflow will be added in later issues.
+cache storage, confirmed audio downloads, timestamped transcription, and
+structured summaries. The connected workflow will be added in later issues.
 
 ## Run locally
 
@@ -104,3 +104,48 @@ previous transcript files and leaves the cache record intact. A full refresh mus
 pass a separate staging store until summarization succeeds, as for audio downloads.
 The adapter follows the [faster-whisper usage documentation](https://github.com/SYSTRAN/faster-whisper#usage),
 including consuming its lazy segment iterator inside the error boundary.
+
+`yt_smzr.summarization.service.summarize_transcript(metadata, transcript, store)`
+generates validated notes and writes separate `summary.md` and `summary.json`
+exports in the video cache directory. It records the provider/model and reuses
+existing valid summary exports unless `force=True`. Alternate providers implement
+`Summarizer.preflight()` and `Summarizer.summarize(metadata, transcript)`. The stage
+restores both summary files when export replacement or cache publication fails.
+Whole-run refreshes must use a staging store until every stage succeeds.
+
+Summarization configuration uses these environment variables:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | Required | OpenAI credential, excluded from settings repr and artifacts. |
+| `YT_SMZR_SUMMARIZATION_PROVIDER` | `openai` | First supported summarization adapter. |
+| `YT_SMZR_SUMMARIZATION_MODEL` | `gpt-4.1-mini` | Model that supports structured outputs. |
+| `YT_SMZR_SUMMARIZER_MAX_INPUT_BYTES` | `100000` | Positive integer limit for one serialized input. |
+
+The limit counts UTF-8 bytes of compact JSON containing the exact trusted
+`instructions` string and serialized `input` string sent to the provider. It
+includes metadata, chapter outlines, segment start/end timestamps, speech,
+JSON escaping, and instructions. It excludes the schema and transport settings;
+it is an application input limit, not a token count or a guarantee that any
+configured model accepts the request. Oversized input fails before constructing
+the client or calling an injected summarizer. No chunking or map-reduce is used.
+
+OpenAI preflight checks configuration and the installed SDK without constructing
+a client or contacting a provider. The adapter uses the Responses API with
+Pydantic structured output, one call without automatic retries, disabled input
+truncation, and `store=False`. Refusals, incomplete responses, absent parsed output,
+and provider failures produce contextual messages without echoing remote errors.
+The request follows the [official OpenAI structured outputs documentation](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses).
+The default model supports structured outputs according to the
+[GPT-4.1 mini documentation](https://developers.openai.com/api/docs/models/gpt-4.1-mini).
+
+Summary chapters must retain the exact YouTube title, order, and start/end times;
+no supplied chapters means an empty outline. Chapter seconds retain fractional
+precision from `VideoMetadata`. Claims are attributed to the video, not
+independently fact-checked. Quotes must match transcript words, capitalization,
+and punctuation after whitespace normalization. A quote can span adjacent
+segments. Its optional integer timestamp must fall within the segment containing
+the quote's start, allowing its fractional start to round down. An empty
+`notable_quotes` list means no grounded quotes were selected. Summary exports
+contain notes and selected quotes, never the transcript segment collection.
+Tests use fake providers and the real SDK with an in-memory HTTP transport.
