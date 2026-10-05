@@ -15,7 +15,7 @@ from yt_smzr.summarization.base import (
     Summary,
     validate_grounding,
 )
-from yt_smzr.summarization.openai_provider import OpenAISummarizer
+from yt_smzr.summarization.factory import create_summarizer
 from yt_smzr.summarization.prompts import check_input_limit, prepare_input
 from yt_smzr.transcription.base import Transcript
 
@@ -56,7 +56,7 @@ def summarize_transcript(
             prepare_input(metadata, transcript),
             configuration.summarizer_max_input_bytes,
         )
-        backend = summarizer or OpenAISummarizer(configuration)
+        backend = summarizer or create_summarizer(configuration)
         backend.preflight()
         summary = Summary.model_validate(
             backend.summarize(metadata, transcript).model_dump()

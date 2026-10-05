@@ -30,7 +30,7 @@ an API key, download models, or contact YouTube.
 defaults to `.yt-smzr/` relative to the current directory. It does not create
 the directory. `YT_SMZR_TRANSCRIPTION_MODEL` selects a faster-whisper model or
 local model directory, defaulting to `small.en`. The full workflow requires
-`ffmpeg`, a supported JavaScript runtime such as Deno for YouTube extraction, and OpenAI configuration
+`ffmpeg`, a supported JavaScript runtime such as Deno for YouTube extraction, and summarization provider configuration
 described in [the MVP PRD](docs/prd-mvp.md). The `yt-dlp[default]` dependency
 includes the YouTube JavaScript challenge solver.
 
@@ -74,7 +74,7 @@ monochrome layouts. Reproduce them without providers or downloads using
 
 ## CLI summarization
 
-With the workflow dependencies and OpenAI configuration described below installed:
+With the workflow dependencies and summarization provider configuration described below installed:
 
 ```sh
 uv run yt-smzr summarize 'https://youtu.be/dQw4w9WgXcQ'
@@ -176,10 +176,31 @@ Summarization configuration uses these environment variables:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `OPENAI_API_KEY` | Required | OpenAI credential, excluded from settings repr and artifacts. |
-| `YT_SMZR_SUMMARIZATION_PROVIDER` | `openai` | First supported summarization adapter. |
-| `YT_SMZR_SUMMARIZATION_MODEL` | `gpt-4.1-mini` | Model that supports structured outputs. |
+| `OPENAI_API_KEY` | Required for OpenAI | OpenAI credential, excluded from settings repr and artifacts. |
+| `OPENROUTER_API_KEY` | Required for OpenRouter | OpenRouter credential, excluded from settings repr and artifacts. |
+| `YT_SMZR_SUMMARIZATION_PROVIDER` | `openai` | `openai` or `openrouter`. Only the selected provider requires its credential. |
+| `YT_SMZR_SUMMARIZATION_MODEL` | `gpt-4.1-mini` for OpenAI | Model that supports structured outputs. OpenRouter requires an explicit nonempty identifier. |
 | `YT_SMZR_SUMMARIZER_MAX_INPUT_BYTES` | `100000` | Positive integer limit for one serialized input. |
+
+For an OpenRouter-only setup, no OpenAI key is needed:
+
+```bash
+export YT_SMZR_SUMMARIZATION_PROVIDER=openrouter
+export OPENROUTER_API_KEY="your-openrouter-key"
+export YT_SMZR_SUMMARIZATION_MODEL="openai/gpt-4.1-mini"
+uv run yt-smzr summarize 'https://youtu.be/dQw4w9WgXcQ' --yes
+# Or launch the TUI with the same environment:
+uv run yt-smzr tui
+```
+
+Choose a model whose endpoint supports `structured_outputs` and JSON Schema
+`response_format` in the [OpenRouter model catalog](https://openrouter.ai/models).
+The adapter uses the [documented Chat Completions endpoint](https://openrouter.ai/docs/quickstart)
+and [strict JSON Schema output with `provider.require_parameters=true`](https://openrouter.ai/docs/guides/features/structured-outputs)
+to require compatible routing. Preflight checks only local configuration and the
+SDK installation; it does not check model availability or contact the provider.
+Unsupported endpoints, invalid output, refusals, and incomplete responses fail
+safely without publishing replacement artifacts.
 
 The limit counts UTF-8 bytes of compact JSON containing the exact trusted
 `instructions` string and serialized `input` string sent to the provider. It
