@@ -46,7 +46,10 @@ class OpenAISummarizer:
         """Validate local configuration, without constructing a client."""
         if self.settings.summarization_provider != "openai":
             raise SummarizationError("YT_SMZR_SUMMARIZATION_PROVIDER must be openai.")
-        if not self.settings.summarization_model.strip():
+        if (
+            not self.settings.summarization_model
+            or not self.settings.summarization_model.strip()
+        ):
             raise SummarizationError("YT_SMZR_SUMMARIZATION_MODEL must not be empty.")
         key = self.settings.openai_api_key
         if key is None or not key.strip():
@@ -66,9 +69,11 @@ class OpenAISummarizer:
             check_input_limit(source, self.settings.summarizer_max_input_bytes)
             key = self.settings.openai_api_key
             assert key is not None  # Validated by preflight.
+            model = self.settings.summarization_model
+            assert model is not None
             with self.factory(key) as client:
                 response = client.responses.parse(
-                    model=self.settings.summarization_model,
+                    model=model,
                     instructions=source.instructions,
                     input=source.source,
                     text_format=SummaryContent,
@@ -95,7 +100,7 @@ class OpenAISummarizer:
             return Summary(
                 **content.model_dump(),
                 provider="openai",
-                model=self.settings.summarization_model,
+                model=model,
             )
         except SummarizationError:
             raise
