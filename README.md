@@ -36,19 +36,41 @@ includes the YouTube JavaScript challenge solver.
 
 ## Terminal workflow
 
-Run `uv run yt-smzr tui`, paste a video URL, and select **Fetch metadata** or
-press Enter in the URL field. The force-refresh checkbox bypasses cache reuse.
-Check the title, channel, duration, ID, and URL, then select **Confirm and process**
-to start downloading and processing. **Cancel** returns to URL entry before any
-processing starts. Full dependency and configuration checks run on submission.
+Run `uv run yt-smzr tui`, paste a video URL, and press Enter to fetch metadata.
+Tab moves to the compact Fetch and force-refresh controls. Check the metadata,
+then press Enter on the focused Process control. Escape cancels pending
+confirmation and returns to URL entry before processing begins. Full dependency
+and configuration checks run on submission.
 
-The current stage and recent events remain visible while workers run. Browse the
-Summary, Transcript, and Output paths tabs, and scroll within each result or the
-metadata area for long content. A completed result stays available if a later
-attempt fails. Controls prevent starting another workflow until the current one
-finishes or metadata confirmation is cancelled. `Ctrl+Q` closes the display;
-blocking pipeline work already started may finish in its worker. Closing the UI
-is not a rollback or cancellation of a processing run.
+| Key | Action |
+| --- | --- |
+| Tab / Shift+Tab | Move focus forward / backward. |
+| Enter | Submit URL or activate the focused control. |
+| Escape | Cancel pending confirmation or close help/settings. |
+| u | Focus URL entry. |
+| f | Toggle force refresh before fetching metadata. |
+| m | Show/hide metadata outside pending confirmation. |
+| s | Provider/model settings integration point; currently shows environment configuration guidance. The dialog arrives with #25. |
+| 1 / 2 / 3 | Focus summary / transcript / output paths. |
+| Arrows / j / k | Navigate or scroll the focused pane outside text inputs. |
+| ? | Open the full key map outside text entry. |
+| Ctrl+Q | Quit. |
+
+Application shortcuts stay inactive in text inputs so typed and pasted characters
+remain intact. Tab leaves text entry. Focused panes show `> Focus` in their border;
+focused controls use reversed text. The footer shows the actions for the current
+workflow state. Help restores its invoking focus when closed.
+
+The current stage and compact event log remain visible during processing. Metadata expands automatically for confirmation. Press m to reopen it later. Results
+and metadata scroll independently, including long titles and output paths. A
+completed result stays available after a later failure. Controls prevent duplicate
+runs. Escape does not cancel pipeline work. Ctrl+Q closes the display; blocking
+work already started may finish in its worker. Closing the UI is not a rollback
+or cancellation of a processing run.
+
+[Terminal review captures](docs/captures/README.md) cover 80x24, 120x40, and
+monochrome layouts. Reproduce them without providers or downloads using
+`uv run --locked python tools/capture_tui.py`.
 
 ## CLI summarization
 
