@@ -275,3 +275,98 @@ async def test_small_screen_long_metadata_and_quit_during_work(tmp_path: Path) -
             workflow.release.set()
     # A stopped thread must not deliver events into a closed application.
     workflow.on_event(PipelineEvent(PipelineStage.COMPLETION, "Late completion."))
+
+
+async def test_keyboard_workflow_shortcuts_and_paste(tmp_path: Path) -> None:
+    from textual.events import Paste
+    from textual.widgets import TabbedContent
+
+    workflow = FakeWorkflow(result(tmp_path))
+    app = SummarizerApp(pipeline_factory=workflow.factory)
+    async with app.run_test(size=(80, 24)) as pilot:
+        entry = app.query_one("#url", Input)
+        characters = "ufmsjk123?"
+        await pilot.press(*characters)
+        assert entry.value == characters
+        entry.post_message(Paste("https://server/u?model=fjk123&s=yes"))
+        await pilot.pause()
+        assert entry.value == characters + "https://server/u?model=fjk123&s=yes"
+        assert len(app.screen_stack) == 1
+        assert not app.query_one("#force", Checkbox).value
+        entry.value = URL
+        await pilot.press("tab", "f", "u", "enter")
+        await wait_workers(app)
+        await pilot.pause()
+        assert workflow.preparations == [(URL, True)]
+        assert app.focused is app.query_one("#confirm")
+        await pilot.press("escape")
+        assert app.focused is entry
+        assert not workflow.confirmations
+        await pilot.press("enter")
+        await wait_workers(app)
+        await pilot.pause()
+        await pilot.press("enter")
+        await wait_workers(app)
+        await pilot.pause()
+        await pilot.press("2")
+        assert app.query_one(TabbedContent).active == "transcript-tab"
+        focused = app.focused
+        await pilot.press("?")
+        assert len(app.screen_stack) == 2
+        await pilot.press("1", "f", "u")
+        assert app.query_one(TabbedContent).active == "transcript-tab"
+        await pilot.press("escape")
+        assert app.focused is focused
+        await pilot.press("3")
+        assert app.query_one(TabbedContent).active == "paths-tab"
+        await pilot.press("1", "m")
+        assert app.query_one("#video-metadata").display
+        assert app.focused is app.query_one("#video-metadata")
+        await pilot.press("m", "u")
+        assert not app.query_one("#video-metadata").display
+        assert app.focused is entry
+
+
+async def test_scroll_resize_and_busy_shortcuts(tmp_path: Path) -> None:
+    from textual.containers import VerticalScroll
+    from textual.widgets import TabbedContent
+
+    output = result(tmp_path / ("long-output-directory-" * 6))
+    output = replace(
+        output,
+        summary=output.summary.model_copy(
+            update={"detailed_summary": "A long line.\n" * 100}
+        ),
+        metadata=replace(output.metadata, title="Long title " * 100),
+    )
+    workflow = FakeWorkflow(output)
+    app = SummarizerApp(pipeline_factory=workflow.factory)
+    async with app.run_test(size=(120, 40)) as pilot:
+        app.query_one("#url", Input).value = URL
+        await pilot.press("enter")
+        await wait_workers(app)
+        await pilot.pause()
+        await pilot.resize_terminal(80, 24)
+        await pilot.pause()
+        assert app.query_one("#confirm").region.bottom < 24
+        workflow.release.clear()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("u", "f", "s", "escape", "enter", "2")
+        assert workflow.confirmations == [True]
+        assert app.query_one(TabbedContent).active == "transcript-tab"
+        assert not app.query_one("#force", Checkbox).value
+        workflow.release.set()
+        await wait_workers(app)
+        await pilot.pause()
+        pane = app.query_one("#summary-tab .result-pane", VerticalScroll)
+        assert app.focused is pane
+        await pilot.press("j", "j", "j")
+        await pilot.pause()
+        assert pane.scroll_y > 0
+        await pilot.press("k")
+        await pilot.pause()
+        await pilot.resize_terminal(120, 40)
+        await pilot.press("3")
+        assert str(output.paths.summary) in text(app, "#paths")
+        assert app.query_one("#hints").region.bottom <= 40

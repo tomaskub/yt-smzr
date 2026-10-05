@@ -5,12 +5,12 @@ from typing import Protocol
 
 from textual import on, work
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
+from textual.screen import ModalScreen
 from textual.widgets import (
     Button,
     Checkbox,
-    Footer,
-    Header,
     Input,
     RichLog,
     Static,
@@ -18,6 +18,7 @@ from textual.widgets import (
     TabPane,
 )
 
+from yt_smzr.config import ConfigurationError, Settings
 from yt_smzr.models import VideoMetadata
 from yt_smzr.pipeline import (
     Pipeline,
@@ -53,23 +54,85 @@ def _metadata(metadata: VideoMetadata) -> str:
     )
 
 
+class HelpScreen(ModalScreen[None]):
+    """A scrollable key map with a predictable return to the invoking pane."""
+
+    BINDINGS = [("escape", "dismiss", "Close"), ("?", "dismiss", "Close")]
+
+    def compose(self) -> ComposeResult:
+        with VerticalScroll(classes="dialog"):
+            yield Static(
+                "KEY MAP\n\n"
+                "Tab / Shift+Tab   Move focus\n"
+                "Enter             Fetch URL / activate focused confirmation\n"
+                "Escape            Cancel pending confirmation / close dialog\n"
+                "u                 Focus URL\n"
+                "f                 Toggle force refresh before preparation\n"
+                "m                 Show/hide metadata\n"
+                "s                 Provider/model settings\n"
+                "1 / 2 / 3         Summary / transcript / output paths\n"
+                "Arrows / j / k    Navigate or scroll outside inputs\n"
+                "?                 This help\n"
+                "Ctrl+Q            Quit\n\n"
+                "Shortcuts are inactive while editing text.\n"
+                "Escape does not stop pipeline work.\n\n"
+                "Escape to return",
+                markup=False,
+            )
+
+
 class SummarizerApp(App[None]):
     """Confirm metadata before processing, with one active workflow at a time."""
 
     TITLE = "yt-smzr"
-    BINDINGS = [("ctrl+q", "quit", "Quit")]
+    BINDINGS = [
+        Binding("ctrl+q", "quit", "Quit"),
+        Binding("u", "url", "URL", show=False),
+        Binding("f", "force", "Force", show=False),
+        Binding("m", "metadata", "Metadata", show=False),
+        Binding("s", "settings", "Settings", show=False),
+        Binding("?", "help", "Help", show=False),
+        Binding("escape", "cancel", "Cancel", show=False),
+        Binding("1", "view('summary-tab')", "Summary", show=False),
+        Binding("2", "view('transcript-tab')", "Transcript", show=False),
+        Binding("3", "view('paths-tab')", "Paths", show=False),
+        Binding("j", "scroll_result(1)", "Down", show=False),
+        Binding("k", "scroll_result(-1)", "Up", show=False),
+    ]
     CSS = """
-    #entry, #confirmation { height: auto; }
+    Screen { background: $surface; color: $text; }
+    #entry { height: 3; }
+    Input { border: solid $foreground 45%; height: 3; padding: 0 1; }
+    Input:focus { border: solid $foreground; }
+    Button { border: none; height: 1; min-width: 8;
+             padding: 0 1; background: $surface; }
+    Button:focus { text-style: bold reverse; }
+    Button:hover { background: $panel; }
     #entry Input { width: 1fr; }
-    #entry Checkbox { width: 21; }
-    #entry Button { margin-left: 1; }
-    #video-metadata { height: 5; }
+    #entry Button { width: 9; margin-top: 1; }
+    #entry Checkbox { width: 20; height: 1; margin-top: 1; border: none; padding: 0; }
+    Checkbox:focus { text-style: reverse; }
+    #provider-status { height: 1; padding: 0 1; }
     #stage { height: 2; padding: 0 1; }
-    #metadata { height: auto; padding: 0 1; }
-    #events { height: 4; border: solid $primary; }
-    TabbedContent { height: 1fr; min-height: 5; }
+    #video-metadata { height: 4; border: solid $foreground 45%; }
+    #video-metadata:focus { border: solid $foreground; }
+    #metadata { height: auto; }
+    #confirmation { height: 1; }
+    #confirm { width: 25; }
+    #cancel { width: 12; }
+    #events { height: 3; border: solid $foreground 45%; }
+    TabbedContent { height: 1fr; min-height: 4; }
     TabPane { padding: 0; }
-    .result { height: auto; padding: 1; }
+    Tabs { height: 1; }
+    Tab { padding: 0 1; height: 1; }
+    Underline { display: none; }
+    .result-pane { border: solid $foreground 45%; }
+    .result-pane:focus { border: solid $foreground; }
+    .result { height: auto; padding: 0 1; }
+    #hints { height: 1; padding: 0 1; text-style: bold; }
+    HelpScreen { align: center middle; background: $background 80%; }
+    .dialog { width: 72; max-width: 100%; height: auto; max-height: 100%;
+              border: solid $foreground; padding: 1 2; background: $surface; }
     """
 
     def __init__(self, *, pipeline_factory: PipelineFactory = _pipeline) -> None:
@@ -78,30 +141,31 @@ class SummarizerApp(App[None]):
         self._pipeline: Workflow | None = None
         self._prepared: PreparedVideo | None = None
         self._busy = False
+        self._show_metadata = False
 
     def compose(self) -> ComposeResult:
-        yield Header()
         with Horizontal(id="entry"):
             yield Input(placeholder="Paste a YouTube video URL", id="url")
-            yield Button("Fetch metadata", id="prepare", variant="primary")
+            yield Button("Fetch", id="prepare")
             yield Checkbox("Force refresh", id="force")
+        yield Static("", id="provider-status", markup=False)
         yield Static("Ready. Enter a URL to fetch metadata.", id="stage", markup=False)
         with VerticalScroll(id="video-metadata"):
             yield Static(
                 "Video metadata will appear here.", id="metadata", markup=False
             )
         with Horizontal(id="confirmation"):
-            yield Button("Confirm and process", id="confirm", variant="success")
+            yield Button("Process", id="confirm")
             yield Button("Cancel", id="cancel")
         yield RichLog(id="events", max_lines=100, wrap=True, markup=False)
         with TabbedContent():
             with TabPane("Summary", id="summary-tab"):
-                with VerticalScroll():
+                with VerticalScroll(classes="result-pane"):
                     yield Static(
                         "No summary yet.", id="summary", classes="result", markup=False
                     )
             with TabPane("Transcript", id="transcript-tab"):
-                with VerticalScroll():
+                with VerticalScroll(classes="result-pane"):
                     yield Static(
                         "No transcript yet.",
                         id="transcript",
@@ -109,15 +173,108 @@ class SummarizerApp(App[None]):
                         markup=False,
                     )
             with TabPane("Output paths", id="paths-tab"):
-                with VerticalScroll():
+                with VerticalScroll(classes="result-pane"):
                     yield Static(
                         "No outputs yet.", id="paths", classes="result", markup=False
                     )
-        yield Footer()
+        yield Static("", id="hints", markup=False)
 
     def on_mount(self) -> None:
         self.query_one("#confirmation").display = False
         self.query_one("#url", Input).focus()
+        self.query_one("#video-metadata").border_title = "Video"
+        self.query_one("#events").border_title = "Events"
+        for pane in self.query(".result-pane"):
+            pane.border_title = "Result"
+        self.refresh_provider_status()
+        self._controls()
+
+    def refresh_provider_status(self) -> None:
+        try:
+            settings = Settings.from_env()
+            label = (
+                f"{settings.summarization_provider} / {settings.summarization_model}"
+            )
+        except ConfigurationError:
+            label = "Invalid configuration"
+        self.query_one("#provider-status", Static).update(label)
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if isinstance(self.screen, ModalScreen) and action not in {
+            "quit",
+            "scroll_result",
+        }:
+            return False
+        if action in {
+            "metadata",
+            "url",
+            "force",
+            "settings",
+            "help",
+            "cancel",
+            "view",
+            "scroll_result",
+        } and isinstance(self.focused, Input):
+            return False
+        return True
+
+    def action_url(self) -> None:
+        if not self._busy and self._prepared is None:
+            self.query_one("#url", Input).focus()
+
+    def action_metadata(self) -> None:
+        if self._prepared is None:
+            self._show_metadata = not self._show_metadata
+            self._controls()
+            if self._show_metadata:
+                self.query_one("#video-metadata").focus()
+
+    def action_force(self) -> None:
+        if not self._busy and self._prepared is None:
+            checkbox = self.query_one("#force", Checkbox)
+            checkbox.value = not checkbox.value
+
+    def action_settings(self) -> None:
+        """Settings dialog integration point for the provider configuration slice."""
+        if not self._busy and self._prepared is None:
+            self.notify(
+                "Provider settings are configured through environment variables."
+            )
+
+    def action_help(self) -> None:
+        focused = self.focused
+
+        def restore(_: None) -> None:
+            if focused is not None:
+                focused.focus()
+
+        self.push_screen(HelpScreen(), restore)
+
+    def action_cancel(self) -> None:
+        self.cancel_requested()
+
+    def action_view(self, pane: str) -> None:
+        tabs = self.query_one(TabbedContent)
+        tabs.active = pane
+        self.query_one(f"#{pane} .result-pane").focus()
+
+    def action_scroll_result(self, direction: int) -> None:
+        focused = self.focused
+        if isinstance(focused, (VerticalScroll, RichLog)):
+            if direction > 0:
+                focused.scroll_down()
+            else:
+                focused.scroll_up()
+
+    def on_descendant_focus(self) -> None:
+        self._update_hints()
+        for pane in self.query("VerticalScroll"):
+            if "dialog" not in pane.classes:
+                pane.border_title = (
+                    "> Focus"
+                    if pane.has_focus
+                    else ("Video" if pane.id == "video-metadata" else "Result")
+                )
 
     def _controls(self) -> None:
         locked = self._busy or self._prepared is not None
@@ -126,6 +283,24 @@ class SummarizerApp(App[None]):
         for selector in ("#confirm", "#cancel"):
             self.query_one(selector, Button).disabled = self._busy
         self.query_one("#confirmation").display = self._prepared is not None
+        self.query_one("#video-metadata").display = (
+            self._prepared is not None or self._show_metadata
+        )
+        self._update_hints()
+
+    def _update_hints(self) -> None:
+        hints = "Tab focus  1/2/3 views  ? help  Ctrl+Q quit"
+        if self._busy:
+            hints = "Working | " + hints
+        elif self._prepared is not None:
+            hints = "Enter on Process  Esc cancel | " + hints
+        elif isinstance(self.focused, Input):
+            hints = "Enter fetch  Tab leave input  Ctrl+Q quit"
+        else:
+            hints = (
+                "u URL  f force  s settings  m video | 1/2/3 views  ? help  Ctrl+Q quit"
+            )
+        self.query_one("#hints", Static).update(hints)
 
     @on(Input.Submitted, "#url")
     @on(Button.Pressed, "#prepare")
@@ -228,7 +403,7 @@ class SummarizerApp(App[None]):
 
     def _completed(self, result: PipelineResult) -> None:
         self.query_one("#metadata", Static).update(_metadata(result.metadata))
-        summary = _metadata(result.metadata) + "\n\n" + summary_markdown(result.summary)
+        summary = summary_markdown(result.summary)
         if not result.summary.notable_quotes:
             summary += "\n## Notable quotes\n\nNo grounded quotes selected.\n"
         self.query_one("#summary", Static).update(summary)
@@ -247,6 +422,7 @@ class SummarizerApp(App[None]):
             f"completion: Outputs saved. Reused stages: {reused}."
         )
         self._reset()
+        self.action_view("summary-tab")
 
 
 def run() -> None:
