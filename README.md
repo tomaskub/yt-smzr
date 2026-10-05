@@ -4,8 +4,8 @@ A local terminal app for turning YouTube videos into transcripts and summaries.
 This bootstrap includes package installation, CLI entrypoints, and a Textual
 welcome screen, reusable YouTube URL validation and metadata fetching, local
 cache storage, confirmed audio downloads, timestamped transcription, and
-structured summaries, and a reusable end-to-end pipeline. CLI and TUI workflow
-controls will be added in later issues.
+structured summaries, a reusable end-to-end pipeline, and a CLI summarization
+workflow. TUI workflow controls will be added in a later issue.
 
 ## Run locally
 
@@ -35,6 +35,28 @@ local model directory, defaulting to `small.en`. The full workflow will also req
 JavaScript runtime such as Deno for YouTube extraction, and OpenAI configuration
 described in [the MVP PRD](docs/prd-mvp.md). The `yt-dlp[default]` dependency
 includes the YouTube JavaScript challenge solver.
+
+## CLI summarization
+
+With the workflow dependencies and OpenAI configuration described below installed:
+
+```sh
+uv run yt-smzr summarize 'https://youtu.be/dQw4w9WgXcQ'
+uv run yt-smzr summarize 'https://youtu.be/dQw4w9WgXcQ' --yes
+uv run yt-smzr summarize 'https://youtu.be/dQw4w9WgXcQ' --force
+```
+
+The command shows title, channel, duration, and video ID before asking
+`Process this video? [y/N]`. Enter `y` or `yes` to proceed. Empty input, other
+answers, or end-of-input cancel before processing. `--yes` skips the prompt for
+automation while still displaying metadata. `--force` refreshes cached results
+and keeps all validation limits in place.
+
+Stage messages appear during processing. A successful run prints the transcript
+and summary Markdown and JSON paths. Processing errors print stage context to
+stderr and exit with status 1; cancellation exits with status 0, and keyboard
+interruption exits with status 130. The default output directory is `.yt-smzr/`
+in the current working directory.
 
 ## Development
 
@@ -72,7 +94,7 @@ later work. `yt_smzr.pipeline.prepare_video(url)` returns typed metadata for
 confirmation without downloading audio. It accepts single-video watch and
 `youtu.be` links, preserves the original URL and YouTube chapters, and rejects
 explicit Shorts, live videos, unknown durations, and videos over two hours.
-The CLI and TUI will call this boundary in later workflow slices.
+The CLI uses the full `Pipeline.prepare` boundary described below.
 
 `yt_smzr.youtube.audio.download_audio(metadata, store, confirmed=True)` downloads
 compressed audio after the caller confirms metadata. It reuses nonempty cached
