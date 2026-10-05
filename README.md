@@ -2,9 +2,9 @@
 
 A local terminal app for turning YouTube videos into transcripts and summaries.
 This bootstrap includes package installation, CLI entrypoints, and a Textual
-welcome screen, plus reusable YouTube URL validation and metadata fetching.
-Audio processing, transcription, summarization, and caching will be added in
-later issues.
+welcome screen, reusable YouTube URL validation and metadata fetching, local
+cache storage, and confirmed audio downloads. Transcription, summarization,
+and the connected workflow will be added in later issues.
 
 ## Run locally
 
@@ -72,3 +72,19 @@ confirmation without downloading audio. It accepts single-video watch and
 `youtu.be` links, preserves the original URL and YouTube chapters, and rejects
 explicit Shorts, live videos, unknown durations, and videos over two hours.
 The CLI and TUI will call this boundary in later workflow slices.
+
+`yt_smzr.youtube.audio.download_audio(metadata, store, confirmed=True)` downloads
+compressed audio after the caller confirms metadata. It reuses nonempty cached
+audio unless `force=True`, and rejects mismatched IDs or invalid durations even
+on a forced run. New audio stays in a temporary directory until download succeeds;
+publication or cache-write failures restore the previous audio and remove partial
+files. The full pipeline must use a separate staging `CacheStore` for a refresh,
+then publish the whole run after transcription and summarization succeed.
+
+Audio preflight requires `ffmpeg` on PATH, the locked `yt-dlp[default]` packages,
+and Deno 2.3.0 or newer or Node 22.0.0 or newer. It checks executable versions
+without printing tool output. These runtime minimums follow the
+[yt-dlp EJS setup guide](https://github.com/yt-dlp/yt-dlp/wiki/EJS).
+The adapter enables Deno and Node explicitly and uses the installed EJS scripts.
+It selects `bestaudio` when available and lets ffmpeg extract compressed audio
+without transcoding when the input codec can be retained.
