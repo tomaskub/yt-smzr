@@ -194,7 +194,12 @@ def test_yt_dlp_python_api_never_downloads(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(importlib.import_module("yt_dlp"), "YoutubeDL", FakeYoutubeDL)
     assert extract_metadata(CANONICAL) == info()
     assert calls == [
-        {"noplaylist": True, "skip_download": True, "quiet": True},
+        {
+            "noplaylist": True,
+            "skip_download": True,
+            "quiet": True,
+            "js_runtimes": {"deno": {}, "node": {}},
+        },
         (CANONICAL, False),
         "closed",
     ]

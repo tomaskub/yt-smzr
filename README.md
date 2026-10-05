@@ -4,7 +4,8 @@ A local terminal app for turning YouTube videos into transcripts and summaries.
 This bootstrap includes package installation, CLI entrypoints, and a Textual
 welcome screen, reusable YouTube URL validation and metadata fetching, local
 cache storage, confirmed audio downloads, timestamped transcription, and
-structured summaries. The connected workflow will be added in later issues.
+structured summaries, and a reusable end-to-end pipeline. CLI and TUI workflow
+controls will be added in later issues.
 
 ## Run locally
 
@@ -149,3 +150,61 @@ the quote's start, allowing its fractional start to round down. An empty
 `notable_quotes` list means no grounded quotes were selected. Summary exports
 contain notes and selected quotes, never the transcript segment collection.
 Tests use fake providers and the real SDK with an in-memory HTTP transport.
+
+
+## Reusable pipeline
+
+The full workflow runs independently of Textual. Both frontends can use the same
+confirmation boundary:
+
+```python
+from yt_smzr.pipeline import Pipeline, PipelineError
+
+pipeline = Pipeline(on_event=lambda event: print(event.stage.value, event.message))
+try:
+    prepared = pipeline.prepare("https://youtu.be/dQw4w9WgXcQ", force=False)
+    print(prepared.metadata.title, prepared.metadata.duration_seconds)
+    confirmed = input("Process this video? [y/N] ").lower() == "y"
+    result = pipeline.process(prepared, confirmed=confirmed)
+    print(result.summary.short_summary)
+    print(result.paths.transcript, result.paths.summary)
+except PipelineError as error:
+    print(error.stage.value, str(error))
+```
+
+`prepare` validates the URL and full local dependencies/configuration before
+reading cached metadata or contacting YouTube. It returns `PreparedVideo` with
+metadata, the force choice, and `metadata_cached`. It writes no artifacts.
+A declined confirmation performs no download, transcription, or summarization.
+`process` rechecks dependencies and metadata limits, then returns `PipelineResult`
+with typed metadata, transcript, summary, artifact paths, retained audio path,
+completed cache record, and `reused_stages`. Its `cache_hit` property reports
+whether audio, transcript, and summary were all reused. `run` aliases `process`.
+The older `prepare_video` helper remains metadata-only and performs no full
+workflow preflight.
+
+Repeated runs reuse valid metadata and audio, plus validated transcript/summary
+JSON. Missing Markdown exports are regenerated from JSON without provider calls.
+Missing or invalid JSON triggers only the affected work; force refresh bypasses
+all cache reuse. Neither force nor cache hits bypass URL, duration, or input-size
+limits. Metadata cache misses fetch fresh YouTube metadata for confirmation.
+
+Every run stages metadata, audio, exports, and cache fields in a separate local
+store. The pipeline publishes the video directory and completed SQLite record
+after all stages succeed, restoring the previous directory if publication or the
+record save fails. Failed runs remove their staged artifacts. If restoration
+itself fails, the contextual error identifies the retained previous backup for
+recovery. Cleanup after a committed success cannot turn it into a failed run.
+This protects against handled failures, not process termination or power loss
+between filesystem and SQLite operations. Use one active run per video and output
+directory.
+
+`PipelineStage` exposes preflight, metadata, confirmation, download, transcription,
+summarization, cache/export, completion, and failure. Immutable `PipelineEvent`
+objects contain a stage and concise message. Calls and callbacks run synchronously
+on the calling thread. Frontends should run the pipeline in a worker and marshal
+events to their UI thread. Observer exceptions are ignored so display failures
+cannot interrupt core work or misreport a committed result. `PipelineError.stage`
+identifies the failed stage, and its message is safe to display without a traceback.
+Tests inject metadata extractors, downloaders, preflight checks, transcribers,
+summarizers, and stores; they use no network, downloaded models, or live providers.
