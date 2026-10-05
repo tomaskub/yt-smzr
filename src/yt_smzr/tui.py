@@ -18,7 +18,7 @@ from textual.widgets import (
     TabPane,
 )
 
-from yt_smzr.config import ConfigurationError, Settings
+from yt_smzr.config import ENV_FIELDS, ConfigurationError, Settings
 from yt_smzr.models import VideoMetadata
 from yt_smzr.pipeline import (
     Pipeline,
@@ -28,6 +28,7 @@ from yt_smzr.pipeline import (
     PipelineStage,
     PreparedVideo,
 )
+from yt_smzr.settings_screen import SettingsScreen
 from yt_smzr.storage.export import summary_markdown, timestamp, transcript_markdown
 
 
@@ -40,10 +41,6 @@ class Workflow(Protocol):
 
 
 PipelineFactory = Callable[[Callable[[PipelineEvent], None]], Workflow]
-
-
-def _pipeline(on_event: Callable[[PipelineEvent], None]) -> Pipeline:
-    return Pipeline(on_event=on_event)
 
 
 def _metadata(metadata: VideoMetadata) -> str:
@@ -135,9 +132,12 @@ class SummarizerApp(App[None]):
               border: solid $foreground; padding: 1 2; background: $surface; }
     """
 
-    def __init__(self, *, pipeline_factory: PipelineFactory = _pipeline) -> None:
+    def __init__(self, *, pipeline_factory: PipelineFactory | None = None) -> None:
         super().__init__()
-        self._pipeline_factory = pipeline_factory
+        self._session: dict[str, object] = {}
+        self._pipeline_factory: PipelineFactory = (
+            pipeline_factory or self._configured_pipeline
+        )
         self._pipeline: Workflow | None = None
         self._prepared: PreparedVideo | None = None
         self._busy = False
@@ -189,9 +189,15 @@ class SummarizerApp(App[None]):
         self.refresh_provider_status()
         self._controls()
 
+    def _configured_pipeline(self, event: Callable[[PipelineEvent], None]) -> Pipeline:
+        return Pipeline(self._effective_settings(), on_event=event)
+
+    def _effective_settings(self) -> Settings:
+        return Settings.from_env(session=self._session)
+
     def refresh_provider_status(self) -> None:
         try:
-            settings = Settings.from_env()
+            settings = self._effective_settings()
             label = (
                 f"{settings.summarization_provider} / {settings.summarization_model}"
             )
@@ -200,9 +206,14 @@ class SummarizerApp(App[None]):
         self.query_one("#provider-status", Static).update(label)
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
-        if isinstance(self.screen, ModalScreen) and action not in {
-            "quit",
-            "scroll_result",
+        if isinstance(self.screen, ModalScreen) and action in {
+            "metadata",
+            "url",
+            "force",
+            "settings",
+            "help",
+            "cancel",
+            "view",
         }:
             return False
         if action in {
@@ -235,11 +246,25 @@ class SummarizerApp(App[None]):
             checkbox.value = not checkbox.value
 
     def action_settings(self) -> None:
-        """Settings dialog integration point for the provider configuration slice."""
-        if not self._busy and self._prepared is None:
-            self.notify(
-                "Provider settings are configured through environment variables."
-            )
+        """Edit next-run selections without changing prepared/active workflows."""
+        if self._busy or self._prepared is not None:
+            return
+        focused = self.focused
+        try:
+            settings = self._effective_settings()
+        except ConfigurationError as exc:
+            self.notify(str(exc), severity="error")
+            return
+
+        def applied(selection: Settings | None) -> None:
+            if selection is not None:
+                self._session = {name: getattr(selection, name) for name in ENV_FIELDS}
+                self.refresh_provider_status()
+                self.notify("Settings applied to subsequent runs.")
+            if focused is not None:
+                focused.focus()
+
+        self.push_screen(SettingsScreen(settings), applied)
 
     def action_help(self) -> None:
         focused = self.focused
@@ -339,6 +364,8 @@ class SummarizerApp(App[None]):
         try:
             pipeline = self._pipeline_factory(self._on_event)
             prepared = pipeline.prepare(url, force=force)
+        except ConfigurationError as error:
+            self._ui(self._failed, PipelineStage.PREFLIGHT, str(error))
         except PipelineError as error:
             self._ui(self._failed, error.stage, str(error))
         except Exception:

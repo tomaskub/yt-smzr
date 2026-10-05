@@ -50,7 +50,7 @@ and configuration checks run on submission.
 | u | Focus URL entry. |
 | f | Toggle force refresh before fetching metadata. |
 | m | Show/hide metadata outside pending confirmation. |
-| s | Provider/model settings integration point; currently shows environment configuration guidance. The dialog arrives with #25. |
+| s | Open provider/model settings when no workflow is prepared or running. |
 | 1 / 2 / 3 | Focus summary / transcript / output paths. |
 | Arrows / j / k | Navigate or scroll the focused pane outside text inputs. |
 | ? | Open the full key map outside text entry. |
@@ -178,8 +178,10 @@ Summarization configuration uses these environment variables:
 | --- | --- | --- |
 | `OPENAI_API_KEY` | Required for OpenAI | OpenAI credential, excluded from settings repr and artifacts. |
 | `OPENROUTER_API_KEY` | Required for OpenRouter | OpenRouter credential, excluded from settings repr and artifacts. |
-| `YT_SMZR_SUMMARIZATION_PROVIDER` | `openai` | `openai` or `openrouter`. Only the selected provider requires its credential. |
-| `YT_SMZR_SUMMARIZATION_MODEL` | `gpt-4.1-mini` for OpenAI | Model that supports structured outputs. OpenRouter requires an explicit nonempty identifier. |
+| `YT_SMZR_SUMMARIZATION_PROVIDER` | `openai` | `openai`, `openrouter`, or `ollama`. Hosted providers require their own credential; Ollama needs none. |
+| `YT_SMZR_SUMMARIZATION_MODEL` | `gpt-4.1-mini` for OpenAI | Model that supports structured outputs. OpenRouter and Ollama require an explicit nonempty identifier. |
+| `YT_SMZR_OLLAMA_BASE_URL` | `http://localhost:11434` | HTTP/HTTPS Ollama server without embedded credentials. |
+| `YT_SMZR_OLLAMA_TIMEOUT_SECONDS` | `120` | Finite positive request timeout, including model discovery. |
 | `YT_SMZR_SUMMARIZER_MAX_INPUT_BYTES` | `100000` | Positive integer limit for one serialized input. |
 
 For an OpenRouter-only setup, no OpenAI key is needed:
@@ -229,6 +231,69 @@ the quote's start, allowing its fractional start to round down. An empty
 `notable_quotes` list means no grounded quotes were selected. Summary exports
 contain notes and selected quotes, never the transcript segment collection.
 Tests use fake providers and the real SDK with an in-memory HTTP transport.
+
+## Ollama and saved settings
+
+Install [Ollama](https://docs.ollama.com/quickstart), start `ollama serve`, and
+install a model yourself, for example `ollama pull qwen3:8b`. Model suitability
+and available context depend on the model and your machine. This app never pulls
+a model or switches providers on failure. Ollama is a user-managed service;
+application installation does not download Ollama models.
+
+Create `~/.yt-smzr.toml`:
+
+```toml
+[summarization]
+provider = "ollama"
+model = "qwen3:8b"
+
+[ollama]
+base_url = "http://localhost:11434"
+timeout_seconds = 120
+```
+
+Then use `yt-smzr tui` or `yt-smzr summarize URL --yes`. Ollama requires no
+OpenAI or OpenRouter credential. A remote Ollama server can use an HTTP/HTTPS
+base URL, including a path prefix. URLs with embedded credentials, query strings,
+or fragments are rejected. Use a server you trust with transcript content.
+Ollama Cloud does not currently support the structured output used here, according
+to [Ollama's structured-output documentation](https://docs.ollama.com/capabilities/structured-outputs).
+
+Settings resolve in this order: explicit TUI session choices, environment,
+dotfile, defaults. Existing OpenAI environment setup still works. OpenRouter and
+Ollama require an explicit model; neither inherits the OpenAI default. Override
+Ollama with `YT_SMZR_OLLAMA_BASE_URL` and `YT_SMZR_OLLAMA_TIMEOUT_SECONDS`.
+`YT_SMZR_SUMMARIZATION_PROVIDER` and `YT_SMZR_SUMMARIZATION_MODEL` override the
+saved provider and model. A missing dotfile is valid. Invalid TOML or section
+shapes report safe file errors; resolved invalid fields report the field without
+printing its value. Valid environment/session overrides replace invalid lower
+priority field values.
+
+Press `s` outside a text input to open settings, then use Tab, Shift+Tab and Enter
+to select a provider and edit the model/server/timeout. **Refresh models** explicitly
+lists installed model names; enter any installed model tag manually. The bounded
+server request runs in a worker so the dialog stays responsive. Startup and local
+preflight make no server requests. **Apply** changes this session. **Save** also
+atomically updates the dotfile and preserves unrelated settings and comments.
+Hosted API keys remain environment-only and are never serialized from settings.
+Active environment overrides appear in the dialog and take precedence again after
+restart. Save failures retain the previous file and keep the dialog open.
+
+The main screen shows the effective provider/model. Settings cannot be changed
+while metadata awaits confirmation or processing runs. A prepared pipeline also
+captures an immutable settings snapshot, including for CLI use. Changes apply to
+subsequent runs. Cached summaries retain their original model; use `--force` or
+**Force refresh** to regenerate with a newly selected model. Failed regeneration
+preserves the previous successful artifacts and cache record.
+
+The Ollama adapter uses one bounded
+[`POST /api/chat`](https://docs.ollama.com/api/chat) request with `stream=false`
+and the existing summary JSON Schema in `format`. It validates schema, chapters,
+quotes, timestamps, input limits, and provenance through the shared pipeline.
+Model discovery uses [`GET /api/tags`](https://docs.ollama.com/api/tags). Errors
+identify connectivity, missing model, timeout, incomplete output, or invalid
+structured output without printing server response bodies. There is no hosted
+fallback or automatic retry.
 
 ## Reusable pipeline
 

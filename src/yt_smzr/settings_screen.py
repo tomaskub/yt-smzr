@@ -6,9 +6,10 @@ from typing import Any, cast
 
 from textual import on, work
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Select, Static
+from textual.widgets import Button, Input, OptionList, Select, Static
 
 from yt_smzr.config import ENV_FIELDS, ConfigurationError, Settings, save_settings
 from yt_smzr.summarization.base import SummarizationError
@@ -20,12 +21,19 @@ ModelLoader = Callable[[Settings], tuple[str, ...]]
 class SettingsScreen(ModalScreen[Settings | None]):
     """Apply affects this session; Save also persists nonsecret selections."""
 
-    BINDINGS = [("escape", "cancel", "Cancel")]
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+        Binding("j", "move(1)", show=False, priority=True),
+        Binding("k", "move(-1)", show=False, priority=True),
+    ]
     CSS = """
     SettingsScreen { align: center middle; background: $background; }
     SettingsScreen .dialog { width: 72; max-width: 100%; height: auto;
-        max-height: 100%; border: solid $primary; padding: 0 1; }
+        max-height: 100%; border: solid $foreground; padding: 0 1; }
     SettingsScreen Input, SettingsScreen Select { height: 3; }
+    SettingsScreen SelectCurrent { border: solid $foreground 45%; }
+    SettingsScreen Select:focus SelectCurrent { border: solid $foreground;
+        text-style: bold reverse; }
     SettingsScreen Static { height: auto; }
     SettingsScreen Horizontal { height: auto; }
     SettingsScreen Button { min-width: 10; margin-right: 1; }
@@ -38,6 +46,38 @@ class SettingsScreen(ModalScreen[Settings | None]):
         self.settings = settings
         self.model_loader = model_loader
         self._listing = False
+        self._model_provider = settings.summarization_provider
+        self._provider_models = {
+            settings.summarization_provider: settings.summarization_model or ""
+        }
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        return not (action == "move" and isinstance(self.focused, Input))
+
+    def action_move(self, direction: int) -> None:
+        focused = self.focused
+        if isinstance(focused, OptionList):
+            if direction > 0:
+                focused.action_cursor_down()
+            else:
+                focused.action_cursor_up()
+        elif isinstance(focused, VerticalScroll):
+            if direction > 0:
+                focused.scroll_down()
+            else:
+                focused.scroll_up()
+
+    @on(Select.Changed, "#settings-provider")
+    def provider_changed(self, event: Select.Changed) -> None:
+        provider = event.value
+        if not isinstance(provider, str) or provider == self._model_provider:
+            return
+        model = self.query_one("#settings-model", Input)
+        self._provider_models[self._model_provider] = model.value
+        self._model_provider = provider
+        model.value = self._provider_models.get(
+            provider, "gpt-4.1-mini" if provider == "openai" else ""
+        )
 
     def compose(self) -> ComposeResult:
         import os
@@ -47,6 +87,7 @@ class SettingsScreen(ModalScreen[Settings | None]):
             yield Select(
                 [(name, name) for name in ("openai", "openrouter", "ollama")],
                 value=self.settings.summarization_provider,
+                type_to_search=False,
                 allow_blank=False,
                 id="settings-provider",
             )
