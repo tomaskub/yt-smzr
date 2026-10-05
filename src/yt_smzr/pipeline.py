@@ -26,7 +26,7 @@ from yt_smzr.summarization.base import (
     Summary,
     validate_grounding,
 )
-from yt_smzr.summarization.openai_provider import OpenAISummarizer
+from yt_smzr.summarization.factory import create_summarizer
 from yt_smzr.summarization.prompts import check_input_limit, prepare_input
 from yt_smzr.summarization.service import summarize_transcript
 from yt_smzr.transcription.base import Transcriber, Transcript, TranscriptionError
@@ -330,7 +330,7 @@ class Pipeline:
     def _dependencies(self) -> tuple[Settings, Transcriber, Summarizer]:
         configuration = self.settings or Settings.from_env()
         transcriber = self.transcriber or FasterWhisperTranscriber(configuration)
-        summarizer = self.summarizer or OpenAISummarizer(configuration)
+        summarizer = self.summarizer or create_summarizer(configuration)
         self.audio_preflight()
         transcriber.preflight()
         summarizer.preflight()

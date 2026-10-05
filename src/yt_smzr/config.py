@@ -68,6 +68,16 @@ class Settings:
                 "gpt-4.1-mini" if self.summarization_provider == "openai" else "",
             )
 
+    openrouter_api_key: str | None = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        if self.summarization_model is None:
+            object.__setattr__(
+                self,
+                "summarization_model",
+                "gpt-4.1-mini" if self.summarization_provider == "openai" else "",
+            )
+
     @classmethod
     def from_env(
         cls, *, path: Path | None = None, session: dict[str, object] | None = None
