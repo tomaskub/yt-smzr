@@ -2,8 +2,9 @@
 
 A local terminal app for turning YouTube videos into transcripts and summaries.
 This bootstrap includes package installation, CLI entrypoints, and a Textual
-welcome screen. Video fetching, transcription, summarization, and caching will
-be added in later issues.
+welcome screen, plus reusable YouTube URL validation and metadata fetching.
+Audio processing, transcription, summarization, and caching will be added in
+later issues.
 
 ## Run locally
 
@@ -66,4 +67,8 @@ videos or call model providers.
 The package lives in `src/yt_smzr/`. CLI and TUI code are separate from
 configuration, models, and the pipeline. The `youtube`, `transcription`,
 `summarization`, and `storage` packages reserve the integration boundaries for
-later work. The processing modules currently contain no implementation.
+later work. `yt_smzr.pipeline.prepare_video(url)` returns typed metadata for
+confirmation without downloading audio. It accepts single-video watch and
+`youtu.be` links, preserves the original URL and YouTube chapters, and rejects
+explicit Shorts, live videos, unknown durations, and videos over two hours.
+The CLI and TUI will call this boundary in later workflow slices.
