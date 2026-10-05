@@ -16,6 +16,7 @@ from typing import Protocol
 
 from yt_smzr.models import VideoMetadata
 from yt_smzr.storage.sqlite import CacheRecord, CacheStore
+from yt_smzr.youtube.logging import SILENT_LOGGER
 from yt_smzr.youtube.metadata import MAX_DURATION_SECONDS
 from yt_smzr.youtube.urls import parse_video_url
 
@@ -87,6 +88,7 @@ def extract_audio(url: str, directory: Path) -> Path:
         "format": "bestaudio/best",
         "noplaylist": True,
         "quiet": True,
+        "logger": SILENT_LOGGER,
         "outtmpl": str(directory / "audio.%(ext)s"),
         "js_runtimes": {name: {} for name in ("deno", "node")},
         "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "best"}],

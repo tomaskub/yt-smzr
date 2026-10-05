@@ -10,6 +10,7 @@ from yt_smzr.config import Settings
 from yt_smzr.models import VideoMetadata
 from yt_smzr.pipeline import Pipeline, PipelineEvent
 from yt_smzr.storage.paths import artifact_paths
+from yt_smzr.storage.sqlite import CacheRecord, CacheStore, StorageError
 from yt_smzr.summarization.base import Summary
 from yt_smzr.transcription.base import Transcript, TranscriptSegment
 from yt_smzr.youtube.urls import parse_video_url
@@ -25,6 +26,7 @@ class FakeAdapters:
         self.calls: list[str] = []
         self.failure: str | None = None
         self.duration = 20
+        self.input_limit = 100_000
         self.before_download = ""
 
     def call(self, stage: str) -> None:
@@ -91,7 +93,10 @@ def adapters(
 
     def create_pipeline(*, on_event: Callable[[PipelineEvent], None]) -> Pipeline:
         return Pipeline(
-            Settings(output_dir=tmp_path / "output"),
+            Settings(
+                output_dir=tmp_path / "output",
+                summarizer_max_input_bytes=fake.input_limit,
+            ),
             extractor=fake.extract,
             downloader=fake.download,
             audio_preflight=fake.preflight,
@@ -255,3 +260,59 @@ def test_summarize_help_needs_no_pipeline_configuration(
         cli.main(["summarize", "--help"])
     assert caught.value.code == 0
     assert "--yes" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("url", "message"),
+    [("invalid", "URL"), (f"https://youtube.com/shorts/{VIDEO_ID}", "Shorts")],
+)
+def test_invalid_urls_have_actionable_cli_errors(
+    adapters: FakeAdapters, capsys: pytest.CaptureFixture[str], url: str, message: str
+) -> None:
+    assert cli.main(["summarize", url, "--yes"]) == 1
+    output = capsys.readouterr()
+    assert message in output.err
+    assert "Error [preflight]" in output.err
+    assert "Traceback" not in output.err
+    assert adapters.calls == []
+
+
+def test_input_limit_cli_error_prevents_provider_call_and_removes_new_artifacts(
+    adapters: FakeAdapters, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    adapters.input_limit = 1
+    assert cli.main(["summarize", URL, "--yes"]) == 1
+    output = capsys.readouterr()
+    assert "Error [summarization]" in output.err
+    assert "single-call" in output.err
+    assert "summarization" not in adapters.calls
+    assert not (tmp_path / "output" / "videos" / VIDEO_ID).exists()
+    assert not list((tmp_path / "output").glob(".pipeline-*"))
+
+
+def test_failed_write_cli_error_preserves_successful_files_and_cache(
+    adapters: FakeAdapters,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert cli.main(["summarize", URL, "--yes"]) == 0
+    capsys.readouterr()
+    store = CacheStore(tmp_path / "output")
+    paths = store.paths(VIDEO_ID)
+    before = {p.name: p.read_bytes() for p in paths.directory.iterdir()}
+    record = store.lookup(VIDEO_ID)
+
+    def fail_metadata(self: CacheStore, metadata: VideoMetadata) -> CacheRecord:
+        raise StorageError(SECRET)
+
+    monkeypatch.setattr(CacheStore, "save_metadata", fail_metadata)
+    assert cli.main(["summarize", URL, "--yes", "--force"]) == 1
+    output = capsys.readouterr()
+    assert "Error [cache_export]" in output.err
+    assert "Could not read or save cache files or database" in output.err
+    assert SECRET not in output.out + output.err
+    assert "Transcript:" not in output.out
+    assert store.lookup(VIDEO_ID) == record
+    assert {p.name: p.read_bytes() for p in paths.directory.iterdir()} == before
+    assert not list(store.output_dir.glob(".pipeline-*"))
