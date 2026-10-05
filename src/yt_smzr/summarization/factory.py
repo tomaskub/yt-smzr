@@ -13,7 +13,11 @@ def create_summarizer(settings: Settings) -> Summarizer:
         from yt_smzr.summarization.openrouter_provider import OpenRouterSummarizer
 
         return OpenRouterSummarizer(settings)
+    if settings.summarization_provider == "ollama":
+        from yt_smzr.summarization.ollama_provider import OllamaSummarizer
+
+        return OllamaSummarizer(settings)
     # Never echo arbitrary environment values, which can contain secrets.
     raise SummarizationError(
-        "YT_SMZR_SUMMARIZATION_PROVIDER must be openai or openrouter."
+        "YT_SMZR_SUMMARIZATION_PROVIDER must be openai, openrouter, or ollama."
     )

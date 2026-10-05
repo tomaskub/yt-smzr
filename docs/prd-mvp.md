@@ -277,3 +277,18 @@ Before a run begins, the app validates required dependencies and configuration f
 ## Open Questions
 
 No open MVP product decisions remain from the initial PRD grilling session.
+
+## Post-MVP extension: local summarization settings
+
+Issue #25 extends the original environment-only and limited-UI decisions. Both
+frontends and the standalone service read `~/.yt-smzr.toml`; explicit TUI choices
+then environment variables override saved values. A keyboard settings dialog
+provides separate Apply and atomic Save actions and explicit worker-based Ollama
+model discovery. Secrets remain environment-only.
+
+Ollama uses an explicit installed model and configurable HTTP/HTTPS server with
+a finite positive timeout. Local startup/preflight remain network-free. Structured
+output follows the existing summary schema, grounding and single-call input
+limits. Model installation belongs to the user; failures never trigger model
+downloads or hosted fallback. Prepared runs freeze settings, and cache reuse,
+force refresh, provenance and failed-refresh rollback remain unchanged.

@@ -94,3 +94,12 @@ Avoid over-engineering authentication, playlists, background queues, multiple us
 ## Product Principle
 
 The main goal is to create a reliable personal tool that turns long YouTube videos into readable notes quickly. The implementation should favor clear code, hackable structure, and easy local experimentation over production-grade complexity.
+
+## Local summarization and configuration
+
+The app also supports Ollama models on a local or user-configured server. Users
+choose an installed model explicitly. A nonsecret TOML dotfile and keyboard TUI
+settings dialog supplement environment configuration. Session edits affect later
+runs, and prepared runs retain their settings snapshot. Users install and manage
+Ollama models themselves; the app does not download them or switch providers on
+failure.

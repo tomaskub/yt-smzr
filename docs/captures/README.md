@@ -14,8 +14,14 @@ output files are created. Captures include deliberately long titles and paths.
 | Failed | [SVG](80x24-failed.svg) | [SVG](120x40-failed.svg) | [SVG](80x24-mono-failed.svg) |
 | Help | [SVG](80x24-help.svg) | [SVG](120x40-help.svg) | [SVG](80x24-mono-help.svg) |
 
-Settings dialog captures will be added by #25. This presentation slice exposes
-its keyboard action and dialog styling, and shows effective provider/model.
+Run `uv run --locked python tools/capture_settings.py` for settings SVG and PNG
+review captures. It uses a fake installed-model loader and requires
+`rsvg-convert` only for PNG rendering.
+
+| Settings | 80x24 | 120x40 | Monochrome 80x24 |
+| --- | --- | --- | --- |
+| Dialog | [PNG](80x24-settings.png) | [PNG](120x40-settings.png) | [PNG](80x24-mono-settings.png) |
+
 The resize behavior and keyboard reachability of long content are covered by
 `tests/test_tui.py`. Metadata and paths remain scrollable rather than truncated
 in application state. SVGs can be viewed in a browser or rendered with
