@@ -3,8 +3,8 @@
 A local terminal app for turning YouTube videos into transcripts and summaries.
 This bootstrap includes package installation, CLI entrypoints, and a Textual
 welcome screen, reusable YouTube URL validation and metadata fetching, local
-cache storage, and confirmed audio downloads. Transcription, summarization,
-and the connected workflow will be added in later issues.
+cache storage, confirmed audio downloads, and timestamped transcription.
+Summarization and the connected workflow will be added in later issues.
 
 ## Run locally
 
@@ -29,8 +29,8 @@ do not require an API key, download models, or contact YouTube.
 
 `Settings.from_env()` in `src/yt_smzr/config.py` reads `YT_SMZR_OUTPUT_DIR`, which
 defaults to `.yt-smzr/` relative to the current directory. It does not create
-the directory. Provider settings and workflow validation will come with later
-processing slices. The full workflow will also require `ffmpeg`, a supported
+the directory. `YT_SMZR_TRANSCRIPTION_MODEL` selects a faster-whisper model or
+local model directory, defaulting to `small.en`. The full workflow will also require `ffmpeg`, a supported
 JavaScript runtime such as Deno for YouTube extraction, and OpenAI configuration
 described in [the MVP PRD](docs/prd-mvp.md). The `yt-dlp[default]` dependency
 includes the YouTube JavaScript challenge solver.
@@ -88,3 +88,19 @@ without printing tool output. These runtime minimums follow the
 The adapter enables Deno and Node explicitly and uses the installed EJS scripts.
 It selects `bestaudio` when available and lets ffmpeg extract compressed audio
 without transcoding when the input codec can be retained.
+
+`yt_smzr.transcription.service.transcribe_audio(video_id, store)` transcribes the
+record's retained audio without launching the UI. It writes `transcript.md` and
+`transcript.json`, preserving start/end timestamps, and records the provider and
+model in the cache. It reuses valid existing exports unless `force=True`. Alternate
+backends implement `Transcriber.preflight()` and `Transcriber.transcribe(path)`.
+
+The default backend uses faster-whisper on CPU with int8 computation and English
+transcription. Preflight checks installed dependencies and a nonempty model setting
+without loading models or contacting the network. The first transcription with a
+model name can download model weights; a local model directory avoids that download.
+Backend and export failures have contextual errors. Failed replacement restores
+previous transcript files and leaves the cache record intact. A full refresh must
+pass a separate staging store until summarization succeeds, as for audio downloads.
+The adapter follows the [faster-whisper usage documentation](https://github.com/SYSTRAN/faster-whisper#usage),
+including consuming its lazy segment iterator inside the error boundary.

@@ -7,11 +7,18 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class Settings:
-    """Local output location. Provider settings will be added with processing."""
+    """Local output and transcription settings."""
 
     output_dir: Path = Path(".yt-smzr")
+
+    transcription_model: str = "small.en"
 
     @classmethod
     def from_env(cls) -> "Settings":
         """Read settings without creating directories or loading providers."""
-        return cls(output_dir=Path(os.environ.get("YT_SMZR_OUTPUT_DIR", ".yt-smzr")))
+        return cls(
+            output_dir=Path(os.environ.get("YT_SMZR_OUTPUT_DIR", ".yt-smzr")),
+            transcription_model=os.environ.get(
+                "YT_SMZR_TRANSCRIPTION_MODEL", "small.en"
+            ),
+        )
