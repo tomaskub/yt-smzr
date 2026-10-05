@@ -68,16 +68,6 @@ class Settings:
                 "gpt-4.1-mini" if self.summarization_provider == "openai" else "",
             )
 
-    openrouter_api_key: str | None = field(default=None, repr=False)
-
-    def __post_init__(self) -> None:
-        if self.summarization_model is None:
-            object.__setattr__(
-                self,
-                "summarization_model",
-                "gpt-4.1-mini" if self.summarization_provider == "openai" else "",
-            )
-
     @classmethod
     def from_env(
         cls, *, path: Path | None = None, session: dict[str, object] | None = None
@@ -103,18 +93,21 @@ class Settings:
             for key, name in fields.items():
                 if key in table:
                     value: Any = cast(dict[str, Any], table)[key]
-                    if key == "timeout_seconds":
-                        if isinstance(value, bool) or not isinstance(
-                            value, (int, float)
-                        ):
-                            raise _error(location, f"{section}.{key}")
-                    elif not isinstance(value, str) or not value.strip():
-                        raise _error(location, f"{section}.{key}")
                     values[name] = value
         for name, variable in ENV_FIELDS.items():
             if variable in os.environ:
                 values[name] = os.environ[variable]
         values.update(session or {})
+        for name, value in values.items():
+            if name not in ENV_FIELDS:
+                raise _error(location, "session field")
+            if name == "ollama_timeout_seconds":
+                continue
+            if not isinstance(value, str) or not value.strip():
+                field_name = name.replace("summarization_", "summarization.").replace(
+                    "ollama_", "ollama."
+                )
+                raise _error(location, field_name)
         provider = values.get("summarization_provider", "openai")
         if not isinstance(provider, str) or provider not in {
             "openai",
@@ -143,15 +136,6 @@ class Settings:
             raise ConfigurationError(
                 "YT_SMZR_SUMMARIZER_MAX_INPUT_BYTES must be a positive integer."
             ) from None
-        for name in ("summarization_model", "ollama_base_url"):
-            value = values.get(name)
-            if value is not None and not isinstance(value, str):
-                raise _error(
-                    location,
-                    name.replace("summarization_", "summarization.").replace(
-                        "ollama_", "ollama."
-                    ),
-                )
         settings = cls(
             output_dir=Path(os.environ.get("YT_SMZR_OUTPUT_DIR", ".yt-smzr")),
             transcription_model=os.environ.get(
@@ -201,6 +185,10 @@ def save_settings(settings: Settings, *, path: Path | None = None) -> None:
 
     location = path or config_path()
     validate_ollama_settings(settings)
+    if settings.summarization_provider not in {"openai", "openrouter", "ollama"}:
+        raise _error(location, "summarization.provider")
+    if not settings.summarization_model or not settings.summarization_model.strip():
+        raise _error(location, "summarization.model")
     document = read_document(location)
     for section, entries in {
         "summarization": {

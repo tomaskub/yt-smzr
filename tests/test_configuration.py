@@ -114,3 +114,34 @@ def test_save_failure_preserves_previous_file(
         save_settings(Settings(), path=path)
     assert path.read_text() == old
     assert list(tmp_path.iterdir()) == [path]
+
+
+def test_valid_overrides_replace_invalid_lower_priority_fields(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "settings.toml"
+    path.write_text("[summarization]\nmodel=123\n")
+    monkeypatch.setenv("YT_SMZR_SUMMARIZATION_MODEL", "env-model")
+    assert Settings.from_env(path=path).summarization_model == "env-model"
+    monkeypatch.setenv("YT_SMZR_SUMMARIZATION_MODEL", "")
+    assert (
+        Settings.from_env(
+            path=path, session={"summarization_model": "session-model"}
+        ).summarization_model
+        == "session-model"
+    )
+
+
+@pytest.mark.parametrize("value", [None, True, 123, [], {}])
+def test_invalid_session_model_never_coerced(tmp_path: Path, value: object) -> None:
+    with pytest.raises(ConfigurationError, match="summarization.model"):
+        Settings.from_env(
+            path=tmp_path / "missing.toml", session={"summarization_model": value}
+        )
+
+
+def test_save_rejects_missing_non_openai_model(tmp_path: Path) -> None:
+    path = tmp_path / "missing.toml"
+    with pytest.raises(ConfigurationError, match="summarization.model"):
+        save_settings(Settings(summarization_provider="ollama"), path=path)
+    assert not path.exists()

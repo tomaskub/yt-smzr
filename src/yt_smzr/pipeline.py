@@ -81,6 +81,7 @@ class PreparedVideo:
     metadata: VideoMetadata
     force: bool = False
     metadata_cached: bool = False
+    settings: Settings | None = None
 
 
 @dataclass(frozen=True)
@@ -327,8 +328,10 @@ class Pipeline:
         self._event(PipelineStage.FAILURE, str(error))
         return error
 
-    def _dependencies(self) -> tuple[Settings, Transcriber, Summarizer]:
-        configuration = self.settings or Settings.from_env()
+    def _dependencies(
+        self, settings: Settings | None = None
+    ) -> tuple[Settings, Transcriber, Summarizer]:
+        configuration = settings or self.settings or Settings.from_env()
         transcriber = self.transcriber or FasterWhisperTranscriber(configuration)
         summarizer = self.summarizer or create_summarizer(configuration)
         self.audio_preflight()
@@ -368,7 +371,7 @@ class Pipeline:
             else:
                 self._event(stage, "Reusing cached metadata.")
             self._event(PipelineStage.CONFIRMATION, "Confirm this video to continue.")
-            return PreparedVideo(metadata, force, cached)
+            return PreparedVideo(metadata, force, cached, configuration)
         except Exception as exc:
             raise self._failure(stage, exc) from None
 
@@ -382,7 +385,9 @@ class Pipeline:
                 raise PipelineError(stage, "Confirm video metadata before processing.")
             _validate_metadata(prepared.metadata)
             stage = PipelineStage.PREFLIGHT
-            configuration, transcriber, summarizer = self._dependencies()
+            configuration, transcriber, summarizer = self._dependencies(
+                prepared.settings
+            )
             metadata = prepared.metadata
             stage = PipelineStage.CACHE_EXPORT
             store = self.store or CacheStore(configuration.output_dir)
