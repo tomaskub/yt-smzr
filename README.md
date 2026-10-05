@@ -1,11 +1,9 @@
 # yt-smzr
 
 A local terminal app for turning YouTube videos into transcripts and summaries.
-This bootstrap includes package installation, CLI entrypoints, and a Textual
-welcome screen, reusable YouTube URL validation and metadata fetching, local
-cache storage, confirmed audio downloads, timestamped transcription, and
-structured summaries, a reusable end-to-end pipeline, and a CLI summarization
-workflow. TUI workflow controls will be added in a later issue.
+The CLI and Textual UI share a reusable pipeline for YouTube URL validation,
+metadata confirmation, audio downloads, timestamped transcription, structured
+summaries, and local cache reuse.
 
 ## Run locally
 
@@ -25,8 +23,8 @@ installs the package, runtime libraries, and development tools into `.venv`.
 The installed command is also available as `.venv/bin/yt-smzr`.
 
 Running `yt-smzr` without arguments prints help. `python -m yt_smzr` exposes
-the same commands. Press `q` to close the welcome screen. These entrypoints
-do not require an API key, download models, or contact YouTube.
+the same commands. Press `Ctrl+Q` to close the TUI. Opening it does not require
+an API key, download models, or contact YouTube.
 
 `Settings.from_env()` in `src/yt_smzr/config.py` reads `YT_SMZR_OUTPUT_DIR`, which
 defaults to `.yt-smzr/` relative to the current directory. It does not create
@@ -35,6 +33,22 @@ local model directory, defaulting to `small.en`. The full workflow will also req
 JavaScript runtime such as Deno for YouTube extraction, and OpenAI configuration
 described in [the MVP PRD](docs/prd-mvp.md). The `yt-dlp[default]` dependency
 includes the YouTube JavaScript challenge solver.
+
+## Terminal workflow
+
+Run `uv run yt-smzr tui`, paste a video URL, and select **Fetch metadata** or
+press Enter in the URL field. The force-refresh checkbox bypasses cache reuse.
+Check the title, channel, duration, ID, and URL, then select **Confirm and process**
+to start downloading and processing. **Cancel** returns to URL entry before any
+processing starts. Full dependency and configuration checks run on submission.
+
+The current stage and recent events remain visible while workers run. Browse the
+Summary, Transcript, and Output paths tabs, and scroll within each result or the
+metadata area for long content. A completed result stays available if a later
+attempt fails. Controls prevent starting another workflow until the current one
+finishes or metadata confirmation is cancelled. `Ctrl+Q` closes the display;
+blocking pipeline work already started may finish in its worker. Closing the UI
+is not a rollback or cancellation of a processing run.
 
 ## CLI summarization
 
@@ -94,7 +108,7 @@ later work. `yt_smzr.pipeline.prepare_video(url)` returns typed metadata for
 confirmation without downloading audio. It accepts single-video watch and
 `youtu.be` links, preserves the original URL and YouTube chapters, and rejects
 explicit Shorts, live videos, unknown durations, and videos over two hours.
-The CLI uses the full `Pipeline.prepare` boundary described below.
+The CLI and TUI use the full `Pipeline.prepare` boundary described below.
 
 `yt_smzr.youtube.audio.download_audio(metadata, store, confirmed=True)` downloads
 compressed audio after the caller confirms metadata. It reuses nonempty cached

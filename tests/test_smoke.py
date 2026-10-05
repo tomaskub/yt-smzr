@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from textual.widgets import Static
+from textual.widgets import Input
 
 from yt_smzr import __version__
 from yt_smzr.tui import SummarizerApp
@@ -61,6 +61,6 @@ def test_module_entrypoint() -> None:
 async def test_tui_starts_and_quits() -> None:
     app = SummarizerApp()
     async with app.run_test() as pilot:
-        assert app.query_one("#welcome", Static).is_mounted
-        await pilot.press("q")
+        assert app.query_one("#url", Input).is_mounted
+        await pilot.press("ctrl+q")
         assert not app.is_running

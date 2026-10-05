@@ -61,7 +61,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--version", action="version", version=f"yt-smzr {__version__}")
     subparsers = parser.add_subparsers(dest="command")
-    subparsers.add_parser("tui", help="Open the placeholder terminal UI")
+    subparsers.add_parser("tui", help="Open the terminal UI")
     summarize = subparsers.add_parser("summarize", help="Summarize one YouTube video")
     summarize.add_argument("url", help="Single-video YouTube watch or youtu.be URL")
     summarize.add_argument(
