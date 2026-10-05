@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from typing import Protocol, cast
 
 from yt_smzr.models import VideoChapter, VideoMetadata
+from yt_smzr.youtube.logging import SILENT_LOGGER
 from yt_smzr.youtube.urls import parse_video_url
 
 MAX_DURATION_SECONDS = 2 * 60 * 60
@@ -27,6 +28,7 @@ def extract_metadata(url: str) -> Mapping[str, object] | None:
             "noplaylist": True,
             "skip_download": True,
             "quiet": True,
+            "logger": SILENT_LOGGER,
             "js_runtimes": {name: {} for name in ("deno", "node")},
         }  # pyright: ignore[reportArgumentType]
     ) as ydl:

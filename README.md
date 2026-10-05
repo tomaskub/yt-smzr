@@ -29,8 +29,8 @@ an API key, download models, or contact YouTube.
 `Settings.from_env()` in `src/yt_smzr/config.py` reads `YT_SMZR_OUTPUT_DIR`, which
 defaults to `.yt-smzr/` relative to the current directory. It does not create
 the directory. `YT_SMZR_TRANSCRIPTION_MODEL` selects a faster-whisper model or
-local model directory, defaulting to `small.en`. The full workflow will also require `ffmpeg`, a supported
-JavaScript runtime such as Deno for YouTube extraction, and OpenAI configuration
+local model directory, defaulting to `small.en`. The full workflow requires
+`ffmpeg`, a supported JavaScript runtime such as Deno for YouTube extraction, and OpenAI configuration
 described in [the MVP PRD](docs/prd-mvp.md). The `yt-dlp[default]` dependency
 includes the YouTube JavaScript challenge solver.
 
@@ -103,8 +103,8 @@ videos or call model providers.
 
 The package lives in `src/yt_smzr/`. CLI and TUI code are separate from
 configuration, models, and the pipeline. The `youtube`, `transcription`,
-`summarization`, and `storage` packages reserve the integration boundaries for
-later work. `yt_smzr.pipeline.prepare_video(url)` returns typed metadata for
+`summarization`, and `storage` packages implement the external adapters and local
+artifact storage. `yt_smzr.pipeline.prepare_video(url)` returns typed metadata for
 confirmation without downloading audio. It accepts single-video watch and
 `youtu.be` links, preserves the original URL and YouTube chapters, and rejects
 explicit Shorts, live videos, unknown durations, and videos over two hours.
@@ -187,7 +187,6 @@ the quote's start, allowing its fractional start to round down. An empty
 contain notes and selected quotes, never the transcript segment collection.
 Tests use fake providers and the real SDK with an in-memory HTTP transport.
 
-
 ## Reusable pipeline
 
 The full workflow runs independently of Textual. Both frontends can use the same
@@ -244,3 +243,20 @@ cannot interrupt core work or misreport a committed result. `PipelineError.stage
 identifies the failed stage, and its message is safe to display without a traceback.
 Tests inject metadata extractors, downloaders, preflight checks, transcribers,
 summarizers, and stores; they use no network, downloaded models, or live providers.
+
+## Acceptance coverage
+
+Tests run without YouTube requests, model downloads, or paid provider calls.
+The final MVP checks map to these suites:
+
+| Requirement | Coverage |
+| --- | --- |
+| URL to saved artifacts, confirmation, cache reuse, and failed force refresh | `test_pipeline.py`, `test_cli.py`, and the real-pipeline TUI test in `test_acceptance.py` |
+| Invalid URL, Shorts, duration, metadata/audio/transcription/provider failures, failed writes, and input limit | `test_pipeline.py` and `test_cli.py` |
+| Default dependency and environment preflight, missing ffmpeg and API key, safe yt-dlp diagnostics | `test_acceptance.py` |
+| URL IDs, cache lookup, timestamped exports, summary validation, and input limit accounting | `test_youtube.py`, `test_storage.py`, `test_transcription.py`, and `test_summarization.py` |
+| UI startup, progress, confirmation, responsiveness, and small terminals | `test_smoke.py` and `test_tui.py` |
+
+The real-pipeline TUI check verifies separate summary/transcript exports and
+compares every saved artifact and the SQLite record after a failed replacement.
+The lower-level pipeline tests also cover publication and rollback failures.

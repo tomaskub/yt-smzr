@@ -8,6 +8,7 @@ import pytest
 
 from yt_smzr.models import VideoChapter
 from yt_smzr.pipeline import prepare_video
+from yt_smzr.youtube.logging import SILENT_LOGGER
 from yt_smzr.youtube.metadata import MetadataError, extract_metadata
 from yt_smzr.youtube.urls import InvalidYouTubeURL, parse_video_url
 
@@ -198,6 +199,7 @@ def test_yt_dlp_python_api_never_downloads(monkeypatch: pytest.MonkeyPatch) -> N
             "noplaylist": True,
             "skip_download": True,
             "quiet": True,
+            "logger": SILENT_LOGGER,
             "js_runtimes": {"deno": {}, "node": {}},
         },
         (CANONICAL, False),
