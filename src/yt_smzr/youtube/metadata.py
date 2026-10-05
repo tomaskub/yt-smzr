@@ -23,7 +23,12 @@ def extract_metadata(url: str) -> Mapping[str, object] | None:
     from yt_dlp import YoutubeDL  # pyright: ignore[reportMissingTypeStubs]
 
     with YoutubeDL(
-        {"noplaylist": True, "skip_download": True, "quiet": True}  # pyright: ignore[reportArgumentType]
+        {
+            "noplaylist": True,
+            "skip_download": True,
+            "quiet": True,
+            "js_runtimes": {name: {} for name in ("deno", "node")},
+        }  # pyright: ignore[reportArgumentType]
     ) as ydl:
         return cast(
             Mapping[str, object] | None,
