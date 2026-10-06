@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from xml.etree import ElementTree
 
+import pytest
 from textual.containers import VerticalScroll
 from textual.widgets import Button, Input, Static, TabbedContent
 
@@ -139,5 +140,40 @@ async def test_confirmation_resizes_and_new_metadata_resets_scroll() -> None:
         await fetch(app)
         await pilot.pause()
         assert pane.scroll_y == 0
+        assert pane.scroll_target_y == 0
         assert "Title: Another long title" in screen_text(app)
+        assert not workflow.confirmations
+
+
+@pytest.mark.parametrize("size", [(80, 24), (120, 40)])
+@pytest.mark.parametrize("scheduled", [False, True])
+async def test_new_metadata_stops_previous_scroll_animation_after_showing_pane(
+    size: tuple[int, int],
+    scheduled: bool,
+) -> None:
+    workflow = ConfirmationWorkflow()
+    workflow.metadata = replace(workflow.metadata, title="Long title " * 100)
+    app = SummarizerApp(pipeline_factory=workflow.factory)
+    async with app.run_test(size=size) as pilot:
+        await fetch(app)
+        await pilot.pause()
+        pane = app.query_one("#video-metadata", VerticalScroll)
+        for index in range(3):
+            if scheduled:
+                pane.animate("scroll_y", pane.max_scroll_y, duration=1, delay=10)
+            else:
+                pane.scroll_end(animate=True, duration=10, force=True, immediate=True)
+                assert pane.scroll_target_y > 0
+            app.cancel_requested()
+            assert not pane.display
+            workflow.metadata = replace(
+                workflow.metadata, title=f"Replacement {index} " * 100
+            )
+            await fetch(app)
+            await pilot.pause()
+            # Completing any remaining old animation must not restore its offset.
+            await pane.stop_animation("scroll_y", complete=True)
+            assert pane.scroll_y == 0
+            assert pane.scroll_target_y == 0
+            assert f"Title: Replacement {index}" in screen_text(app)
         assert not workflow.confirmations

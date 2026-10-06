@@ -46,7 +46,7 @@ and configuration checks run on submission.
 | --- | --- |
 | Tab / Shift+Tab | Move focus forward / backward. |
 | Enter | Submit URL or activate the focused control. |
-| Escape | Cancel pending confirmation or close help/settings. |
+| Escape | Cancel pending confirmation or close a dialog. |
 | u | Focus URL entry. |
 | f | Toggle force refresh before fetching metadata. |
 | m | Show/hide metadata outside pending confirmation. |
@@ -54,10 +54,11 @@ and configuration checks run on submission.
 | 1 / 2 / 3 | Focus summary / transcript / output paths. |
 | Arrows / j / k | Navigate or scroll the focused pane outside text inputs. |
 | ? | Open the full key map outside text entry. |
+| F2 | Open the full current error, including from URL entry. |
 | Ctrl+Q | Quit. |
 
-Application shortcuts stay inactive in text inputs so typed and pasted characters
-remain intact. Tab leaves text entry. Focused panes show `> Focus` in their border;
+Letter, number, and ? shortcuts stay inactive in text inputs so typed and pasted
+characters remain intact. Tab leaves text entry. Focused panes show `> Focus` in their border;
 focused controls use reversed text. The footer shows the actions for the current
 workflow state. Help restores its invoking focus when closed.
 
@@ -67,6 +68,12 @@ completed result stays available after a later failure. Controls prevent duplica
 runs. Escape does not cancel pipeline work. Ctrl+Q closes the display; blocking
 work already started may finish in its worker. Closing the UI is not a rollback
 or cancellation of a processing run.
+
+Events reflow when the terminal resizes and show the beginning of the latest
+message. After a failure, the stage area keeps a concise excerpt and an
+F2 full error hint. F2 opens the complete stage and message in a scrollable
+dialog. Use arrows, j/k, or Page Up/Down to scroll, then Escape or F2 to return
+to the previous focus. A new submission clears the previous error.
 
 [Terminal review captures](docs/captures/README.md) cover 80x24, 120x40, and
 monochrome layouts. Reproduce them without providers or downloads using
