@@ -120,8 +120,14 @@ uv build
 ```
 
 The smoke tests cover package imports, the installed console command, the
-module entrypoint, and a headless Textual startup and quit. They do not download
-videos or call model providers.
+module entrypoint, installed faster-whisper audio decoding of a tiny generated
+local WAV fixture, and a headless Textual startup and quit. They do not download
+videos or call model providers. The decoder check exercises PyAV without loading
+a Whisper model; it does not establish end-to-end transcription or TUI acceptance.
+
+PyAV is constrained to `>=16.1,<17` because faster-whisper 1.2.x passes
+`metadata_errors` to `av.open`, which PyAV 19 rejects. Revisit the constraint when
+upgrading faster-whisper and keep the installed-dependency decode check passing.
 
 The package lives in `src/yt_smzr/`. CLI and TUI code are separate from
 configuration, models, and the pipeline. The `youtube`, `transcription`,
