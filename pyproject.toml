@@ -17,6 +17,7 @@ dependencies = [
     "pydantic>=2.12,<3",
     "textual>=1,<9",
     "tomlkit>=0.13,<1",
+    "tqdm>=4.70,<5",
     "yt-dlp[default]>=2025.10.22",
 ]
 

@@ -104,10 +104,11 @@ class FakeModel:
         self.failure = failure
 
     def transcribe(
-        self, audio: str, *, language: str
+        self, audio: str, *, language: str, log_progress: bool
     ) -> tuple[Iterator[WhisperSegment], object]:
         assert audio == "audio.m4a"
         assert language == "en"
+        assert log_progress is False
         return self.segments(), object()
 
     def segments(self) -> Iterator[WhisperSegment]:
@@ -139,11 +140,13 @@ def test_default_adapter_materializes_segments() -> None:
 def test_adapter_wraps_backend_failures(failure: str) -> None:
     class BrokenModel(FakeModel):
         def transcribe(
-            self, audio: str, *, language: str
+            self, audio: str, *, language: str, log_progress: bool
         ) -> tuple[Iterator[WhisperSegment], object]:
             if failure == "call":
                 raise OSError("decode failure")
-            return super().transcribe(audio, language=language)
+            return super().transcribe(
+                audio, language=language, log_progress=log_progress
+            )
 
         def segments(self) -> Iterator[WhisperSegment]:
             if failure == "invalid":

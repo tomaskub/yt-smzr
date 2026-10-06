@@ -1,5 +1,6 @@
 """Settings submission exercises the real pipeline and hosted local preflight."""
 
+import asyncio
 import threading
 from collections.abc import Callable, Mapping
 from dataclasses import replace
@@ -275,12 +276,15 @@ async def test_prepared_openrouter_process_uses_snapshot(
         monkeypatch.setenv("YT_SMZR_SUMMARIZATION_PROVIDER", "openai")
         monkeypatch.delenv("OPENROUTER_API_KEY")
         pipelines[-1].downloader = download
-        await pilot.click("#confirm")
-        await pilot.pause()
-        assert entered.is_set()
-        app.action_settings()
-        assert not isinstance(app.screen, SettingsScreen)
-        release.set()
+        try:
+            await pilot.click("#confirm")
+            assert await asyncio.to_thread(entered.wait, timeout=5), (
+                "Processing worker did not enter the downloader"
+            )
+            app.action_settings()
+            assert not isinstance(app.screen, SettingsScreen)
+        finally:
+            release.set()
         await app.workers.wait_for_complete()  # pyright: ignore[reportUnknownMemberType]
         await pilot.pause()
         assert "completion" in str(app.query_one("#stage", Static).content)
