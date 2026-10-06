@@ -153,6 +153,10 @@ async def test_app_configuration_error_preserves_safe_file_field_message(
         await app.workers.wait_for_complete()  # pyright: ignore[reportUnknownMemberType]
         await pilot.pause()
         message = str(app.query_one("#stage", Static).content)
+        assert "Invalid settings" in message
+        assert "F2 full error" in message
+        await pilot.press("f2")
+        message = str(app.screen.query_one("#error-message", Static).content)
         assert str(path) in message
         assert "summarization.provider" in message
         assert "secret" not in message

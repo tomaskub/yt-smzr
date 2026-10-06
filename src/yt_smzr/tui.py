@@ -1,6 +1,6 @@
 """Single-screen frontend for the synchronous, reusable video pipeline."""
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Protocol
 
 from textual import on, work
@@ -19,6 +19,7 @@ from textual.widgets import (
 )
 
 from yt_smzr.config import ENV_FIELDS, ConfigurationError, Settings
+from yt_smzr.error_display import EventLog, FailureScreen, FailureStatus
 from yt_smzr.models import VideoMetadata
 from yt_smzr.pipeline import (
     Pipeline,
@@ -70,8 +71,9 @@ class HelpScreen(ModalScreen[None]):
                 "1 / 2 / 3         Summary / transcript / output paths\n"
                 "Arrows / j / k    Navigate or scroll outside inputs\n"
                 "?                 This help\n"
+                "F2                Full current error (also from URL input)\n"
                 "Ctrl+Q            Quit\n\n"
-                "Shortcuts are inactive while editing text.\n"
+                "Letter/number/? shortcuts are inactive while editing text.\n"
                 "Escape does not stop pipeline work.\n\n"
                 "Escape to return",
                 markup=False,
@@ -92,6 +94,14 @@ class MetadataPane(VerticalScroll):
         if self.parent is not None:
             self.parent.query_one("#metadata-hint").display = self.max_scroll_y > 0
 
+    async def reset_for_metadata(self) -> None:
+        # Force the reset even if its previous layout had no scrollbar.
+        # Cancel scheduled as well as running animations from the previous video.
+        await self.stop_animation("scroll_x", complete=False)
+        await self.stop_animation("scroll_y", complete=False)
+        self.scroll_home(animate=False, force=True, immediate=True)
+        self.update_scroll_hint()
+
 
 class SummarizerApp(App[None]):
     """Confirm metadata before processing, with one active workflow at a time."""
@@ -105,6 +115,7 @@ class SummarizerApp(App[None]):
         Binding("m", "metadata", "Metadata", show=False),
         Binding("s", "settings", "Settings", show=False),
         Binding("?", "help", "Help", show=False),
+        Binding("f2", "error_details", "Full error", show=False),
         Binding("escape", "cancel", "Cancel", show=False),
         Binding("1", "view('summary-tab')", "Summary", show=False),
         Binding("2", "view('transcript-tab')", "Transcript", show=False),
@@ -160,6 +171,7 @@ class SummarizerApp(App[None]):
         self._prepared: PreparedVideo | None = None
         self._busy = False
         self._show_metadata = False
+        self._current_error: PipelineEvent | None = None
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="entry"):
@@ -167,7 +179,7 @@ class SummarizerApp(App[None]):
             yield Button("Fetch", id="prepare")
             yield Checkbox("Force refresh", id="force")
         yield Static("", id="provider-status", markup=False)
-        yield Static("Ready. Enter a URL to fetch metadata.", id="stage", markup=False)
+        yield FailureStatus("Ready. Enter a URL to fetch metadata.", id="stage")
         with MetadataPane(id="video-metadata"):
             yield Static(
                 "Video metadata will appear here.", id="metadata", markup=False
@@ -176,7 +188,7 @@ class SummarizerApp(App[None]):
             yield Button("Process", id="confirm")
             yield Button("Cancel", id="cancel")
             yield Static("Shift+Tab: video; arrows scroll", id="metadata-hint")
-        yield RichLog(id="events", max_lines=100, wrap=True, markup=False)
+        yield EventLog(id="events")
         with TabbedContent():
             with TabPane("Summary", id="summary-tab"):
                 with VerticalScroll(classes="result-pane"):
@@ -233,6 +245,7 @@ class SummarizerApp(App[None]):
             "help",
             "cancel",
             "view",
+            "error_details",
         }:
             return False
         if action in {
@@ -247,6 +260,20 @@ class SummarizerApp(App[None]):
         } and isinstance(self.focused, Input):
             return False
         return True
+
+    def action_error_details(self) -> None:
+        if self._current_error is None:
+            return
+        focused = self.focused
+
+        def restore(_: None) -> None:
+            if focused is not None:
+                focused.focus()
+
+        error = self._current_error
+        self.push_screen(
+            FailureScreen(error.stage.value.replace("_", "/"), error.message), restore
+        )
 
     def action_url(self) -> None:
         if not self._busy and self._prepared is None:
@@ -356,15 +383,19 @@ class SummarizerApp(App[None]):
             self.query_one("#stage", Static).update("Enter a YouTube video URL.")
             return
         self._busy = True
+        self._current_error = None
+        self.query_one("#stage", FailureStatus).clear_failure()
         self._controls()
-        self.query_one("#events", RichLog).clear()
+        self.query_one("#events", EventLog).clear_events()
         self.query_one("#stage", Static).update("Preparing metadata...")
         self._prepare(url, self.query_one("#force", Checkbox).value)
 
     def _on_event(self, event: PipelineEvent) -> None:
         self._ui(self._render_event, event)
 
-    def _ui(self, callback: Callable[..., None], *args: object) -> None:
+    def _ui(
+        self, callback: Callable[..., None | Awaitable[None]], *args: object
+    ) -> None:
         # Thread workers may finish after the user has closed the app.
         if self.is_running:
             try:
@@ -375,8 +406,9 @@ class SummarizerApp(App[None]):
 
     def _render_event(self, event: PipelineEvent) -> None:
         stage = event.stage.value.replace("_", "/")
+        self.query_one("#stage", FailureStatus).clear_failure()
         self.query_one("#stage", Static).update(f"{stage}: {event.message}")
-        self.query_one("#events", RichLog).write(f"{stage}: {event.message}")
+        self.query_one("#events", EventLog).append_event(f"{stage}: {event.message}")
 
     @work(thread=True, exit_on_error=False)
     def _prepare(self, url: str, force: bool) -> None:
@@ -392,21 +424,24 @@ class SummarizerApp(App[None]):
         else:
             self._ui(self._ready_to_confirm, pipeline, prepared)
 
-    def _ready_to_confirm(self, pipeline: Workflow, prepared: PreparedVideo) -> None:
+    async def _ready_to_confirm(
+        self, pipeline: Workflow, prepared: PreparedVideo
+    ) -> None:
         self._pipeline = pipeline
         self._prepared = prepared
         self._busy = False
         self.query_one("#metadata", Static).update(_metadata(prepared.metadata))
-        self.query_one("#video-metadata", VerticalScroll).scroll_home(animate=False)
         cache = " Metadata reused from cache." if prepared.metadata_cached else ""
         refresh = " Force refresh selected." if prepared.force else ""
         self.query_one("#stage", Static).update(
             f"confirmation: Check the metadata, then confirm or cancel.{cache}{refresh}"
         )
         self._controls()
-        self.call_after_refresh(
-            self.query_one("#video-metadata", MetadataPane).update_scroll_hint
-        )
+        pane = self.query_one("#video-metadata", MetadataPane)
+        # Reset now so the old viewport cannot flash while awaiting layout, then
+        # repeat after layout before rendering the new confirmation metadata.
+        await pane.reset_for_metadata()
+        self.call_after_refresh(pane.reset_for_metadata)
         self.query_one("#confirm", Button).focus()
 
     @on(Button.Pressed, "#cancel")
@@ -447,7 +482,11 @@ class SummarizerApp(App[None]):
         self._controls()
 
     def _failed(self, stage: PipelineStage, message: str) -> None:
+        self._current_error = PipelineEvent(stage, message)
         self._render_event(PipelineEvent(stage, f"Failed: {message}"))
+        self.query_one("#stage", FailureStatus).show_failure(
+            stage.value.replace("_", "/"), message
+        )
         self._reset()
         self.query_one("#url", Input).focus()
 

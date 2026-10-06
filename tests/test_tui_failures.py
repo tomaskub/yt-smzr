@@ -4,6 +4,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import pytest
+from textual.geometry import Region
 from textual.widgets import Input, RichLog, Static
 
 from yt_smzr.config import ConfigurationError, Settings
@@ -123,7 +124,15 @@ async def test_pipeline_failures_render_once_in_status_and_real_event_log(
             await pilot.pause()
 
         expected = f"{stage.value.replace('_', '/')}: Failed: {message}"
-        assert str(app.query_one("#stage", Static).content) == expected
+        status = app.query_one("#stage", Static)
+        assert str(status.content) == f"{expected}\nF2 full error"
+        rendered_status = "\n".join(
+            strip.text
+            for strip in status.render_lines(Region(0, 0, status.size.width, 2))
+        )
+        assert expected in rendered_status
+        assert rendered_status.count(f"{stage.value.replace('_', '/')}: Failed:") == 1
+        assert "F2 full error" in rendered_status
         lines = [line.text.rstrip() for line in app.query_one("#events", RichLog).lines]
         log_text = " ".join(lines)
         assert log_text.endswith(expected)
