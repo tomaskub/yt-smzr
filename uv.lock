@@ -1021,6 +1021,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "textual" },
     { name = "tomlkit" },
+    { name = "tqdm" },
     { name = "yt-dlp", extra = ["default"] },
 ]
 
@@ -1040,6 +1041,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.12,<3" },
     { name = "textual", specifier = ">=1,<9" },
     { name = "tomlkit", specifier = ">=0.13,<1" },
+    { name = "tqdm", specifier = ">=4.70,<5" },
     { name = "yt-dlp", extras = ["default"], specifier = ">=2025.10.22" },
 ]
 
