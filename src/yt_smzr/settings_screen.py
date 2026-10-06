@@ -103,13 +103,13 @@ class SettingsScreen(ModalScreen[Settings | None]):
             )
             yield Static("Ollama HTTP/HTTPS server", markup=False)
             yield Input(value=self.settings.ollama_base_url, id="settings-server")
-            yield Static("Request timeout in seconds", markup=False)
+            yield Static("Ollama request timeout in seconds", markup=False)
             yield Input(
                 value=str(self.settings.ollama_timeout_seconds), id="settings-timeout"
             )
-            yield Button("Refresh models", id="settings-refresh")
+            yield Button("Refresh Ollama models", id="settings-refresh")
             yield Static(
-                "Refresh lists installed models; manual entry is allowed.",
+                "Refresh lists installed Ollama models; manual entry is allowed.",
                 id="settings-models",
                 markup=False,
             )
@@ -196,7 +196,7 @@ class SettingsScreen(ModalScreen[Settings | None]):
         self._listing = True
         self.query_one("#settings-refresh", Button).disabled = True
         self.query_one("#settings-models", Static).update(
-            "Checking installed models..."
+            "Checking installed Ollama models..."
         )
         self._refresh_models(selection)
 
@@ -205,9 +205,10 @@ class SettingsScreen(ModalScreen[Settings | None]):
         try:
             models = self.model_loader(settings)
             message = (
-                "Installed models: " + ", ".join(models)
+                "Installed Ollama models: " + ", ".join(models)
                 if models
-                else "No installed models. Install a compatible model with ollama pull."
+                else "No installed models on the Ollama server. "
+                "Install with ollama pull."
             )
         except (SummarizationError, ConfigurationError) as exc:
             message = str(exc)
