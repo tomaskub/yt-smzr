@@ -9,6 +9,8 @@ description = "A local terminal app for summarizing YouTube videos."
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
+    # faster-whisper 1.2.x uses metadata_errors, which PyAV 19 no longer accepts.
+    "av>=16.1,<17",
     "faster-whisper>=1.2,<2",
     "httpx>=0.28,<1",
     "openai>=2,<3",
