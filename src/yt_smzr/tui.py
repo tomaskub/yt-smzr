@@ -78,10 +78,26 @@ class HelpScreen(ModalScreen[None]):
             )
 
 
+class MetadataPane(VerticalScroll):
+    """Keep the confirmation scrolling hint in sync with the visible viewport."""
+
+    def on_resize(self) -> None:
+        self.call_after_refresh(self.update_scroll_hint)
+
+    def watch_virtual_size(self) -> None:
+        if self.is_mounted:
+            self.update_scroll_hint()
+
+    def update_scroll_hint(self) -> None:
+        if self.parent is not None:
+            self.parent.query_one("#metadata-hint").display = self.max_scroll_y > 0
+
+
 class SummarizerApp(App[None]):
     """Confirm metadata before processing, with one active workflow at a time."""
 
     TITLE = "yt-smzr"
+    VERTICAL_BREAKPOINTS = [(32, "metadata-roomy")]
     BINDINGS = [
         Binding("ctrl+q", "quit", "Quit"),
         Binding("u", "url", "URL", show=False),
@@ -112,11 +128,13 @@ class SummarizerApp(App[None]):
     #provider-status { height: 1; padding: 0 1; }
     #stage { height: 2; padding: 0 1; }
     #video-metadata { height: 4; border: solid $foreground 45%; }
+    Screen.metadata-roomy #video-metadata { height: 7; }
     #video-metadata:focus { border: solid $foreground; }
     #metadata { height: auto; }
     #confirmation { height: 1; }
     #confirm { width: 25; }
     #cancel { width: 12; }
+    #metadata-hint { width: 1fr; height: 1; }
     #events { height: 3; border: solid $foreground 45%; }
     TabbedContent { height: 1fr; min-height: 4; }
     TabPane { padding: 0; }
@@ -150,13 +168,14 @@ class SummarizerApp(App[None]):
             yield Checkbox("Force refresh", id="force")
         yield Static("", id="provider-status", markup=False)
         yield Static("Ready. Enter a URL to fetch metadata.", id="stage", markup=False)
-        with VerticalScroll(id="video-metadata"):
+        with MetadataPane(id="video-metadata"):
             yield Static(
                 "Video metadata will appear here.", id="metadata", markup=False
             )
         with Horizontal(id="confirmation"):
             yield Button("Process", id="confirm")
             yield Button("Cancel", id="cancel")
+            yield Static("Shift+Tab: video; arrows scroll", id="metadata-hint")
         yield RichLog(id="events", max_lines=100, wrap=True, markup=False)
         with TabbedContent():
             with TabPane("Summary", id="summary-tab"):
@@ -378,12 +397,16 @@ class SummarizerApp(App[None]):
         self._prepared = prepared
         self._busy = False
         self.query_one("#metadata", Static).update(_metadata(prepared.metadata))
+        self.query_one("#video-metadata", VerticalScroll).scroll_home(animate=False)
         cache = " Metadata reused from cache." if prepared.metadata_cached else ""
         refresh = " Force refresh selected." if prepared.force else ""
         self.query_one("#stage", Static).update(
             f"confirmation: Check the metadata, then confirm or cancel.{cache}{refresh}"
         )
         self._controls()
+        self.call_after_refresh(
+            self.query_one("#video-metadata", MetadataPane).update_scroll_hint
+        )
         self.query_one("#confirm", Button).focus()
 
     @on(Button.Pressed, "#cancel")
