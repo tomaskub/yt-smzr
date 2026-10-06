@@ -386,7 +386,7 @@ class SummarizerApp(App[None]):
         except ConfigurationError as error:
             self._ui(self._failed, PipelineStage.PREFLIGHT, str(error))
         except PipelineError as error:
-            self._ui(self._failed, error.stage, str(error))
+            self._ui(self._failed, error.stage, error.display_message)
         except Exception:
             self._ui(self._failed, PipelineStage.PREFLIGHT, "Could not prepare video.")
         else:
@@ -434,7 +434,7 @@ class SummarizerApp(App[None]):
         try:
             result = pipeline.process(prepared, confirmed=True)
         except PipelineError as error:
-            self._ui(self._failed, error.stage, str(error))
+            self._ui(self._failed, error.stage, error.display_message)
         except Exception:
             self._ui(self._failed, PipelineStage.FAILURE, "Could not process video.")
         else:

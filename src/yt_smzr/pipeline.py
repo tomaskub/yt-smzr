@@ -71,8 +71,16 @@ class PipelineEvent:
 class PipelineError(RuntimeError):
     """A safe display message and the stage that failed. No provider traceback."""
 
-    def __init__(self, stage: PipelineStage, message: str) -> None:
+    def __init__(
+        self,
+        stage: PipelineStage,
+        message: str,
+        *,
+        display_message: str | None = None,
+    ) -> None:
         self.stage = stage
+        # Frontends that supply their own stage label can use the safe raw text.
+        self.display_message = message if display_message is None else display_message
         super().__init__(message)
 
 
@@ -322,7 +330,9 @@ class Pipeline:
                 SummarizationError,
             ),
         ):
-            error = PipelineError(stage, f"{stage.value}: {exc}")
+            error = PipelineError(
+                stage, f"{stage.value}: {exc}", display_message=str(exc)
+            )
         else:
             error = PipelineError(stage, f"Could not complete {stage.value} stage.")
         self._event(PipelineStage.FAILURE, str(error))

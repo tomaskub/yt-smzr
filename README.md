@@ -276,11 +276,13 @@ printing its value. Valid environment/session overrides replace invalid lower
 priority field values.
 
 Press `s` outside a text input to open settings, then use Tab, Shift+Tab and Enter
-to select a provider and edit the model/server/timeout. **Refresh models** explicitly
-lists installed model names; enter any installed model tag manually. The bounded
-server request runs in a worker so the dialog stays responsive. Startup and local
-preflight make no server requests. **Apply** changes this session. **Save** also
-atomically updates the dotfile and preserves unrelated settings and comments.
+to select a provider and edit the model/server/timeout. **Refresh Ollama models**
+lists only the configured Ollama server's installed models, including when a hosted
+provider is selected. The list does not describe OpenAI or OpenRouter models or
+change the selected provider/model. Enter the chosen provider's model manually.
+The bounded server request runs in a worker so the dialog stays responsive.
+Startup and local preflight make no server requests. **Apply** changes this session.
+**Save** also atomically updates the dotfile and preserves unrelated settings and comments.
 Hosted API keys remain environment-only and are never serialized from settings.
 The dialog shows the active provider/model separately from the draft selection.
 Selecting OpenRouter and then pressing Escape or Cancel leaves the active provider
